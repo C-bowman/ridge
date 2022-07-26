@@ -317,6 +317,29 @@ class PdfGrid:
 
         return NN
 
+    def plot_convergence(self):
+        import matplotlib.pyplot as plt
+        fig = plt.figure(figsize=(10, 4))
+        ax1 = fig.add_subplot(121)
+        ax1.plot(self.threshold_evals, self.threshold_probs, '.-', lw=2)
+        ax1.set_xlabel("total posterior evaluations")
+        ax1.set_ylabel("total probability of evaluated cells")
+        ax1.grid()
+
+        ax2 = fig.add_subplot(122)
+        p = array(self.threshold_probs[1:])
+        frac_diff = p[1:]/p[:-1] - 1
+        ax2.plot(self.threshold_evals[2:], frac_diff, alpha=0.5, lw=2, c="C0")
+        ax2.plot(self.threshold_evals[2:], frac_diff, 'D', c="C0")
+        ax2.set_xlim([0., None])
+        ax2.set_yscale("log")
+        ax2.set_xlabel("total posterior evaluations")
+        ax2.set_ylabel("fractional change in total probability")
+        ax2.grid()
+
+        plt.tight_layout()
+        plt.show()
+
     def get_marginal(self, z):
         """
         Integrate over the dimensions of the parameter space that are not

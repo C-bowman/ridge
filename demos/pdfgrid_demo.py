@@ -42,3 +42,5 @@ ind_axes, probs = SPG.get_marginal(params)
 ax1, ax2 = [ax*grid_spacing[p] for ax, p in zip(ind_axes, params)]
 plt.contourf(ax1, ax2, probs.T)
 plt.show()
+
+SPG.plot_convergence()
