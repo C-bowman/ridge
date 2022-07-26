@@ -95,8 +95,7 @@ class PdfGrid:
 
         # Here we convert the self.to_evaluate values to strings such
         # that they are hashable and can be added to the self.evaluated set.
-        eval_update = set([v.tobytes() for v in self.to_evaluate])
-
+        eval_update = {v.tobytes() for v in self.to_evaluate}
         # now update the lists which store cell information
         self.probability.extend(prob_vals)
         self.indices.extend(self.to_evaluate)
@@ -151,10 +150,9 @@ class PdfGrid:
             # need to double check this
             self.CC_index = len(self.probability) - len(prob_vals) + loc
 
-    def find_update(self, prob_vals):
-        # TODO - why is there an unused argument here?
+    def find_update(self, *args):
         # if the last search evaluation has high enough probability, switch to the
-        # the 'climb' state and update the current cell info to tbe the last evaluation.
+        # 'climb' state and update the current cell info to tbe the last evaluation.
         if self.probability[-1] > (self.globalmax - self.climb_threshold):
             self.state = "climb"
             self.CC_index = len(self.probability) - 1
@@ -224,7 +222,7 @@ class PdfGrid:
         )
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
-        fill_set = set([v.tobytes() for v in r])
+        fill_set = {v.tobytes() for v in r}
         # now we have the set, we can use difference update to
         # remove all the index vectors which are already evaluated
         fill_set.difference_update(self.evaluated)
@@ -295,9 +293,7 @@ class PdfGrid:
             NN[L : 2 * L, k] = 0
             NN[2 * L : 3 * L, k] = 1
 
-            if (
-                k != n - 1
-            ):  # we replace the first instance of the pattern with itself here
+            if k != n - 1:  # we replace the first instance of the pattern with itself
                 for j in range(3 ** (n - 1 - k)):  # less efficient but keeps it simple
                     NN[0 + j * (3 * L) : (j + 1) * (3 * L), k] = NN[0 : 3 * L, k]
 
@@ -346,8 +342,8 @@ class PdfGrid:
 
             for i, j in enumerate(i_grid):
                 bools = I[:, z] == j
-                if any(bools):
-                    P_grid[i] = exp(probs[where(bools)]).sum()
+                if bools.any():
+                    P_grid[i] = exp(probs[bools]).sum()
 
         # TODO - should check whether the n-dimensional code can be overhauled
         else:  # multi-dimensional code

@@ -16,7 +16,7 @@ class ToroidalGaussian(object):
 
 
 posterior = ToroidalGaussian()
-grid_spacing = array([0.05,0.05,0.02])
+grid_spacing = array([0.05, 0.05, 0.02])
 SPG = PdfGrid(3)
 
 # Main GridFill loop
@@ -28,7 +28,7 @@ while SPG.state != "end":
     SPG.take_step()
 t2 = time()
 
-print('\n # RUNTIME: {:.1f} ms'.format((t2-t1)*1000))
+print(f"\n # RUNTIME: {(t2-t1)*1000:.1f} ms")
 
 indices, probs = SPG.get_marginal(0)
 plt.plot(indices*grid_spacing[0], probs)
