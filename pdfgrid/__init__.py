@@ -7,19 +7,17 @@ from numpy.random import normal
 from copy import copy
 from itertools import product
 import sys
+from pdfgrid.plotting import plot_convergence
 
 
 class PdfGrid:
-    """
-    stuff
-    """
 
     def __init__(self, n):  # should add search_scale here
         # CONSTANTS
         self.n = n  # number of parameters / dimensions
         self.type = int16
         self.CC = zeros(n, dtype=self.type)  # Set current vector as [0,0,0,...]
-        self.NN = self.nn_list(n)  # list of nearest-neighbour vectors
+        self.NN = self.nn_vectors(n)  # list of nearest-neighbour vectors
         self.nnn = self.NN.shape[0]  # number of nearest-neighbours
 
         # SETTINGS
@@ -202,7 +200,7 @@ class PdfGrid:
 
     def fill_proposal(self):
         if self.fill_setup:
-            # The very first time we get to fill, we need to get all locate all
+            # The very first time we get to fill, we need to locate all
             # relevant edge cells, i.e. those which have unevaluated neighbours
             # and are above the threshold.
             # TODO - the probability check may be unnecessary as all cells below threshold are removed earlier
@@ -281,7 +279,7 @@ class PdfGrid:
         sys.stdout.write(msg)
         sys.stdout.flush()
 
-    def nn_list(self, n, cutoff=1, include_center=False):
+    def nn_vectors(self, n, cutoff=1, include_center=False):
         """
         Generates nearest neighbour list offsets from center cell
         """
@@ -318,27 +316,7 @@ class PdfGrid:
         return NN
 
     def plot_convergence(self):
-        import matplotlib.pyplot as plt
-        fig = plt.figure(figsize=(10, 4))
-        ax1 = fig.add_subplot(121)
-        ax1.plot(self.threshold_evals, self.threshold_probs, '.-', lw=2)
-        ax1.set_xlabel("total posterior evaluations")
-        ax1.set_ylabel("total probability of evaluated cells")
-        ax1.grid()
-
-        ax2 = fig.add_subplot(122)
-        p = array(self.threshold_probs[1:])
-        frac_diff = p[1:]/p[:-1] - 1
-        ax2.plot(self.threshold_evals[2:], frac_diff, alpha=0.5, lw=2, c="C0")
-        ax2.plot(self.threshold_evals[2:], frac_diff, 'D', c="C0")
-        ax2.set_xlim([0., None])
-        ax2.set_yscale("log")
-        ax2.set_xlabel("total posterior evaluations")
-        ax2.set_ylabel("fractional change in total probability")
-        ax2.grid()
-
-        plt.tight_layout()
-        plt.show()
+        plot_convergence(self.threshold_evals, self.threshold_probs)
 
     def get_marginal(self, z):
         """
