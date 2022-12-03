@@ -1,6 +1,6 @@
 
 from numpy import array, where, zeros, exp
-from imageio import mimwrite, imread
+from imageio.v2 import mimwrite, imread
 from os import remove
 from itertools import chain
 import matplotlib.pyplot as plt
