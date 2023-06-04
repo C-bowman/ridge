@@ -25,16 +25,16 @@ def rosenbrock(t):
     v = 3   # variance of the gaussian term
     return -X2 - b*(Y - X2)**2 - 0.5*(X2 + Y**2)/v
 
-grid_spacing = array([0.1,0.1])
-SPG = PdfGrid(2)
+grid_spacing = array([0.1, 0.1])
+grid_centre = array([0., 0.])
+SPG = PdfGrid(spacing=grid_spacing, offset=grid_centre)
 
 
 image_id = 0
 files = []
 while SPG.state != "end":
-    P = [rosenbrock(theta*grid_spacing) for theta in SPG.to_evaluate]
-    SPG.update_cells(P)
-    SPG.take_step()
+    P = array([rosenbrock(theta) for theta in SPG.get_parameters()])
+    SPG.give_probabilities(P)
 
 
     grid = zeros([60, 60]) + 2

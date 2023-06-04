@@ -1,8 +1,7 @@
 from numpy import sqrt, log, exp, round, abs, floor
-from numpy import array, zeros, arange, delete, append, linspace, frombuffer
+from numpy import array, zeros, arange, delete, append, linspace, frombuffer, stack
 from numpy import argmax, where
-from numpy import int16
-from numpy import max as npmax
+from numpy import int16, ndarray
 from numpy.random import normal
 from copy import copy
 from itertools import product
@@ -12,20 +11,41 @@ from pdfgrid.plotting import plot_convergence
 
 class PdfGrid:
 
-    def __init__(self, n):  # should add search_scale here
+    def __init__(self, spacing: ndarray, offset: ndarray, search_scale=5.0, convergence=1e-3):
+
+        self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
+        self.offset = offset if isinstance(offset, ndarray) else array(offset)
+
+        if self.spacing.ndim != 1 or self.offset.ndim != 1:
+            raise ValueError(
+                f"[ PdfGrid error ] \n \
+                >> 'spacing' and 'offset' must be 1D numpy arrays, but have \
+                >> dimensions {self.spacing.ndim} and {self.offset.ndim} respectively.\
+                "
+            )
+
+        if self.spacing.size != self.offset.size:
+            raise ValueError(
+                f"[ PdfGrid error ] \n \
+                >> 'spacing' and 'offset' must be 1D numpy arrays of equal size, but \
+                >> have sizes {self.spacing.size} and {self.offset.size} respectively.\
+                "
+            )
+
         # CONSTANTS
-        self.n = n  # number of parameters / dimensions
+        self.n_dims = self.spacing.size  # number of parameters / dimensions
         self.type = int16
-        self.CC = zeros(n, dtype=self.type)  # Set current vector as [0,0,0,...]
-        self.NN = self.nn_vectors(n)  # list of nearest-neighbour vectors
-        self.nnn = self.NN.shape[0]  # number of nearest-neighbours
+        self.CC = zeros(self.n_dims, dtype=self.type)  # Set current vector as [0,0,0,...]
+        self.NN = self.nn_vectors(self.n_dims)  # list of nearest-neighbour vectors
+        self.n_neighbours = self.NN.shape[0]  # number of nearest-neighbours
 
         # SETTINGS
         self.threshold = 1
-        self.threshold_adjust_factor = sqrt(0.5) ** self.n
+        self.threshold_adjust_factor = sqrt(0.5) ** self.n_dims
         self.climb_threshold = 5
-        self.search_max = int(50 * n)
-        self.search_scale = 5.0
+        self.search_max = int(50 * self.n_dims)
+        self.search_scale = search_scale
+        self.convergence = convergence
 
         # DATA STORAGE
         self.indices = list()
@@ -69,10 +89,13 @@ class PdfGrid:
 
         # Append the entire NN list to make the first evaluation list
         self.to_evaluate.append(self.CC)
-        for i in range(self.nnn):
+        for i in range(self.n_neighbours):
             self.to_evaluate.append(self.CC + self.NN[i, :])
 
-    def update_cells(self, prob_vals):
+    def get_parameters(self) -> ndarray:
+        return stack(self.to_evaluate) * self.spacing[None, :] + self.offset[None, :]
+
+    def give_probabilities(self, log_probabilities: ndarray):
         """
         <purpose>
             Accepts the newly-evaluated probabilities corresponding
@@ -84,34 +107,37 @@ class PdfGrid:
         <output> NONE
         """
 
-        # First thing - sum the incoming probability, add to running integral,
-        # and append to integral array
-        pmax = npmax(prob_vals)
+        # Sum the incoming probabilities, add to running integral and append to integral array
+        pmax = log_probabilities.max()
         self.total_prob.append(
-            self.total_prob[-1] + exp(pmax + log(exp(prob_vals - pmax).sum()))
+            self.total_prob[-1] + exp(pmax + log(exp(log_probabilities - pmax).sum()))
         )
 
         # Here we convert the self.to_evaluate values to strings such
         # that they are hashable and can be added to the self.evaluated set.
         eval_update = {v.tobytes() for v in self.to_evaluate}
         # now update the lists which store cell information
-        self.probability.extend(prob_vals)
+        self.probability.extend(log_probabilities)
         self.indices.extend(self.to_evaluate)
-        self.status.extend([2] * len(prob_vals))
+        self.status.extend([2] * len(log_probabilities))
         self.evaluated.update(eval_update)
 
         # run the state-specific update code
-        self.update_actions[self.state](prob_vals)
+        self.update_actions[self.state](log_probabilities)
         # For diagnostic purposes, we save here the latest number of evals
-        self.cell_batches.append(len(prob_vals))
+        self.cell_batches.append(len(log_probabilities))
         # clean out the to_evaluate list here
         self.to_evaluate.clear()
+        # generate a new set of evaluations
+        if self.verbose:
+            self.print_status()
+        self.proposal_actions[self.state]()
 
-    def fill_update(self, prob_vals):
+    def fill_update(self, log_probabilities: ndarray):
         # add cells that are higher than threshold to edge_push
         prob_cutoff = self.globalmax - self.threshold
         self.edge_push = [
-            v for v, p in zip(self.to_evaluate, prob_vals) if p > prob_cutoff
+            v for v, p in zip(self.to_evaluate, log_probabilities) if p > prob_cutoff
         ]
 
         # if there are no cells above threshold, so lower it (or terminate)
@@ -125,17 +151,17 @@ class PdfGrid:
                     self.threshold_probs[-1] - self.threshold_probs[-2]
                 ) / self.threshold_probs[-2]
 
-            if delta_ptot < 5e-4:
+            if delta_ptot < self.convergence:
                 self.state = "end"
                 offset = self.threshold_evals[0]
                 self.threshold_evals = [i - offset for i in self.threshold_evals]
 
-    def climb_update(self, prob_vals):
+    def climb_update(self, log_probabilities: ndarray):
         curr_prob = self.probability[self.CC_index]
 
         self.status[self.CC_index] = 1
         # if current probability is greater than all nearest neighbours, it is local maximum
-        if curr_prob > npmax(prob_vals):
+        if curr_prob > log_probabilities.max():
             # update global maximum probability if needed
             if curr_prob > self.globalmax:
                 self.globalmax = curr_prob
@@ -143,10 +169,10 @@ class PdfGrid:
             self.state = "find"  # moves to find state
         # otherwise, choose biggest neighbour as next current cell
         else:
-            loc = argmax(prob_vals)
+            loc = argmax(log_probabilities)
             self.CC = self.to_evaluate[loc]
             # need to double check this
-            self.CC_index = len(self.probability) - len(prob_vals) + loc
+            self.CC_index = len(self.probability) - len(log_probabilities) + loc
 
     def find_update(self, *args):
         # if the last search evaluation has high enough probability, switch to the
@@ -164,14 +190,6 @@ class PdfGrid:
     def list_empty_neighbours(self, empty_NN):
         # Use the list generated by self.check_neighbours to list empty neighbours for evaluation
         self.to_evaluate.extend([self.CC + self.NN[i, :] for i in empty_NN])
-
-    def take_step(self):
-        """
-        Continue forward one 'batch' worth of cells for evaluation
-        """
-        if self.verbose:
-            self.print_status()
-        self.proposal_actions[self.state]()
 
     def climb_proposal(self):
         empty_NN = self.check_neighbours()
@@ -216,7 +234,7 @@ class PdfGrid:
 
         # generate an array of all neighbours of all edge positions using outer addition via broadcasting
         r = (edge_vecs[None, :, :] + self.NN[:, None, :]).reshape(
-            edge_vecs.shape[0] * self.NN.shape[0], self.n
+            edge_vecs.shape[0] * self.NN.shape[0], self.n_dims
         )
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
@@ -263,7 +281,7 @@ class PdfGrid:
         """
         while True:
             # pick set of normally distributed random indices
-            self.CC = (round(normal(scale=self.search_scale, size=self.n))).astype(
+            self.CC = (round(normal(scale=self.search_scale, size=self.n_dims))).astype(
                 self.type
             )
 
@@ -310,7 +328,7 @@ class PdfGrid:
                 NN = delete(NN, i, 0)
 
         if include_center:
-            zeroarray = zeros((1, self.n), dtype=self.type)
+            zeroarray = zeros((1, self.n_dims), dtype=self.type)
             NN = append(NN, zeroarray, axis=0)
 
         return NN

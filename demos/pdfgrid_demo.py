@@ -1,9 +1,10 @@
 from numpy import sqrt, array
+from time import perf_counter
 import matplotlib.pyplot as plt
 from pdfgrid import PdfGrid
 
 
-class ToroidalGaussian(object):
+class ToroidalGaussian:
     def __init__(self):
         self.R0 = 1.
         self.eps = 0.05
@@ -17,30 +18,29 @@ class ToroidalGaussian(object):
 
 posterior = ToroidalGaussian()
 grid_spacing = array([0.05, 0.05, 0.02])
-SPG = PdfGrid(3)
+grid_centre = array([0., 0., 0.])
+grid = PdfGrid(spacing=grid_spacing, offset=grid_centre)
 
 # Main GridFill loop
-from time import time
-t1 = time()
-while SPG.state != "end":
-    P = [posterior(theta*grid_spacing) for theta in SPG.to_evaluate]
-    SPG.update_cells(P)
-    SPG.take_step()
-t2 = time()
+t1 = perf_counter()
+while grid.state != "end":
+    P = array([posterior(theta) for theta in grid.get_parameters()])
+    grid.give_probabilities(P)
+t2 = perf_counter()
 
 print(f"\n # RUNTIME: {(t2-t1)*1000:.1f} ms")
 
-indices, probs = SPG.get_marginal(0)
+indices, probs = grid.get_marginal(0)
 plt.plot(indices*grid_spacing[0], probs)
 plt.grid()
 plt.tight_layout()
 plt.show()
 
-params = [0,1]
-ind_axes, probs = SPG.get_marginal(params)
+params = [0, 1]
+ind_axes, probs = grid.get_marginal(params)
 
 ax1, ax2 = [ax*grid_spacing[p] for ax, p in zip(ind_axes, params)]
 plt.contourf(ax1, ax2, probs.T)
 plt.show()
 
-SPG.plot_convergence()
+grid.plot_convergence()
