@@ -64,12 +64,12 @@ class PdfGrid:
         self.convergence = convergence
 
         # DATA STORAGE
-        self.indices = list()
+        self.coordinates = list()
         self.probability = list()
 
         # DECISION MAKING
         self.evaluated = set()
-        self.status = list()
+        self.exterior = list()
         self.to_evaluate = list()
         self.edge_push = list()
         self.total_prob = [0]
@@ -132,12 +132,11 @@ class PdfGrid:
 
         # Here we convert the self.to_evaluate values to strings such
         # that they are hashable and can be added to the self.evaluated set.
-        eval_update = {v.tobytes() for v in self.to_evaluate}
+        self.evaluated |= {v.tobytes() for v in self.to_evaluate}
         # now update the lists which store cell information
         self.probability.extend(log_probabilities)
-        self.indices.extend(self.to_evaluate)
-        self.status.extend([2] * len(log_probabilities))
-        self.evaluated.update(eval_update)
+        self.coordinates.extend(self.to_evaluate)
+        self.exterior.extend([True] * log_probabilities.size)
 
         # run the state-specific update code
         self.update_actions[self.state](log_probabilities)
@@ -176,7 +175,7 @@ class PdfGrid:
     def climb_update(self, log_probabilities: ndarray):
         curr_prob = self.probability[self.CC_index]
 
-        self.status[self.CC_index] = 1
+        self.exterior[self.CC_index] = False
         # if current probability is greater than all nearest neighbours, it is local maximum
         if curr_prob > log_probabilities.max():
             # update global maximum probability if needed
@@ -224,11 +223,11 @@ class PdfGrid:
 
             for i in arange(len(self.probability))[::-1]:
                 if self.probability[i] < prob_cutoff:
-                    temp = self.indices[i].tobytes()
+                    temp = self.coordinates[i].tobytes()
                     self.evaluated.remove(temp)
                     del self.probability[i]
-                    del self.indices[i]
-                    del self.status[i]
+                    del self.coordinates[i]
+                    del self.exterior[i]
 
             self.state = "fill"
             self.fill_proposal()
@@ -240,9 +239,9 @@ class PdfGrid:
             # and are above the threshold.
             # TODO - the probability check may be unnecessary as all cells below threshold are removed earlier
             prob_cutoff = self.globalmax - self.threshold
-            iterator = zip(self.indices, self.status, self.probability)
+            iterator = zip(self.coordinates, self.exterior, self.probability)
             edge_vecs = array(
-                [v for v, s, p in iterator if s == 2 and p > prob_cutoff],
+                [v for v, ext, p in iterator if ext and p > prob_cutoff],
                 dtype=self.type,
             )
             self.fill_setup = False
@@ -284,7 +283,7 @@ class PdfGrid:
 
         prob_cutoff = self.globalmax - self.threshold
         self.edge_push = [
-            v for v, p in zip(self.indices, self.probability) if p < prob_cutoff
+            v for v, p in zip(self.coordinates, self.probability) if p < prob_cutoff
         ]
         self.threshold += self.threshold_adjust_factor
 
@@ -361,7 +360,7 @@ class PdfGrid:
         Input - z - a list of one or more integers indicating the dimension(s)
                     over which NOT to integrate.  Integrate the rest.
         """
-        I = array(self.indices)
+        I = array(self.coordinates)
         probs = array(self.probability)
         probs -= probs.max()
 

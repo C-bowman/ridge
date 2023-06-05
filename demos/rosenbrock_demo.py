@@ -38,8 +38,8 @@ while SPG.state != "end":
 
 
     grid = zeros([60, 60]) + 2
-    for v,p in zip(SPG.indices, SPG.probability):
-        i,j = v
+    for v,p in zip(SPG.coordinates, SPG.probability):
+        i, j = v
         grid[i+30,j+30] = p
 
     inds = where(grid == 2)
@@ -49,7 +49,7 @@ while SPG.state != "end":
     current_cmap = get_cmap()
     current_cmap.set_under('white')
 
-    filename = 'rosenbrock_{}.png'.format(image_id)
+    filename = f'rosenbrock_{image_id}.png'
     files.append(filename)
 
     fig = plt.figure(figsize = (8,8))
