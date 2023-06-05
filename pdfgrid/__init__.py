@@ -10,7 +10,23 @@ from pdfgrid.plotting import plot_convergence
 
 
 class PdfGrid:
+    """
+    Adaptive grid evaluation for PDFs
 
+    :param spacing: \
+        A numpy ``ndarray`` specifying the grid spacing in each dimension.
+
+    :param offset: \
+        A numpy ``ndarray`` specifying the parameter values at the grid origin.
+
+    :param search_scale: \
+        The standard deviation (in grid cells) of the normal distribution used to
+        randomly select cells for evaluation when searching for maxima.
+
+    :param convergence: \
+        The threshold for the fractional change in total probability which is used
+        to determine when the algorithm has converged.
+    """
     def __init__(self, spacing: ndarray, offset: ndarray, search_scale=5.0, convergence=1e-3):
 
         self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
@@ -93,18 +109,19 @@ class PdfGrid:
             self.to_evaluate.append(self.CC + self.NN[i, :])
 
     def get_parameters(self) -> ndarray:
+        """
+        Get the parameter vectors for which the posterior log-probability needs to be
+        calculated and passed to the ``give_probabilities`` method.
+
+        :return: \
+            A 2D numpy ``ndarray`` of parameter vectors with shape (n_vectors, n_dimensions).
+        """
         return stack(self.to_evaluate) * self.spacing[None, :] + self.offset[None, :]
 
     def give_probabilities(self, log_probabilities: ndarray):
         """
-        <purpose>
-            Accepts the newly-evaluated probabilities corresponding
-            to all cells in the to_evaluate list.
-            Makes decisions regarding if a change of state is needed.
-
-        <use> GridFill_object.update_cells(prob_vals)
-        <input> prob_vals - numpy array containing probability values
-        <output> NONE
+        Accepts the newly-evaluated log-probabilities values corresponding to the
+        parameter vectors given by the ``get_parameters`` method.
         """
 
         # Sum the incoming probabilities, add to running integral and append to integral array
