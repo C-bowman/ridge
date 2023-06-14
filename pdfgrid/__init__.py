@@ -2,7 +2,7 @@ from numpy import sqrt, log, exp, round, abs, floor
 from numpy import array, zeros, arange, delete, append, linspace, frombuffer, stack
 from numpy import argmax, where
 from numpy import int16, ndarray
-from numpy.random import normal
+from numpy.random import normal, choice, uniform
 from copy import copy
 from itertools import product
 import sys
@@ -421,3 +421,31 @@ class PdfGrid:
                     P_grid[k] = 0
 
         return i_grid, P_grid
+
+    def generate_sample(self, n_samples: int) -> ndarray:
+        """
+        Generate samples by approximating the PDF using nearest-neighbour
+        interpolation around the evaluated grid cells.
+
+        :param n_samples: \
+            Number of samples to generate.
+
+        :return: \
+            The samples as a 2D numpy ``ndarray`` with shape
+            ``(n_samples, n_dimensions)``.
+        """
+        # normalise the probabilities
+        p = array(self.probability)
+        p = exp(p - p.max())
+        p /= p.sum()
+        # use the probabilities to weight samples of the grid cells
+        indices = choice(len(self.probability), size=n_samples, p=p)
+        # gather the evaluated cell coordinates into a 2D numpy array
+        params = stack(self.coordinates) * self.spacing[None, :] + self.offset[None, :]
+        # Randomly pick points within the sampled cells
+        sample = params[indices, :] + uniform(
+            low=-0.5*self.spacing,
+            high=0.5*self.spacing,
+            size=[n_samples, self.n_dims]
+        )
+        return sample
