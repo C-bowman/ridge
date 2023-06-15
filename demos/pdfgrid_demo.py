@@ -2,6 +2,7 @@ from numpy import sqrt, array
 from time import perf_counter
 import matplotlib.pyplot as plt
 from pdfgrid import PdfGrid
+from pdfgrid.plotting import plot_marginal_2d
 
 
 class ToroidalGaussian:
@@ -17,7 +18,7 @@ class ToroidalGaussian:
 
 
 posterior = ToroidalGaussian()
-grid_spacing = array([0.05, 0.05, 0.02])
+grid_spacing = array([0.04, 0.04, 0.02])
 grid_centre = array([0., 0., 0.])
 grid = PdfGrid(spacing=grid_spacing, offset=grid_centre)
 
@@ -30,17 +31,13 @@ t2 = perf_counter()
 
 print(f"\n # RUNTIME: {(t2-t1)*1000:.1f} ms")
 
-indices, probs = grid.get_marginal(0)
-plt.plot(indices*grid_spacing[0], probs)
+points, probs = grid.get_marginal(0)
+plt.plot(points, probs)
 plt.grid()
 plt.tight_layout()
 plt.show()
 
-params = [0, 1]
-ind_axes, probs = grid.get_marginal(params)
-
-ax1, ax2 = [ax*grid_spacing[p] for ax, p in zip(ind_axes, params)]
-plt.contourf(ax1, ax2, probs.T)
-plt.show()
+points, probs = grid.get_marginal([0, 1])
+plot_marginal_2d(points, probs)
 
 grid.plot_convergence()

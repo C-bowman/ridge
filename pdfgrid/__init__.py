@@ -1,10 +1,9 @@
 from numpy import sqrt, log, exp, round, abs, floor
-from numpy import array, zeros, arange, delete, append, linspace, frombuffer, stack
-from numpy import argmax, where
+from numpy import array, zeros, arange, delete, append, frombuffer, stack
+from numpy import argmax, unique
 from numpy import int16, ndarray
 from numpy.random import normal, choice, uniform
 from copy import copy
-from itertools import product
 import sys
 from pdfgrid.plotting import plot_convergence
 
@@ -352,75 +351,32 @@ class PdfGrid:
     def plot_convergence(self):
         plot_convergence(self.threshold_evals, self.threshold_probs)
 
-    def get_marginal(self, z):
+    def get_marginal(self, variables: int | list[int]) -> tuple[ndarray, ndarray]:
         """
-        Integrate over the dimensions of the parameter space that are not
-         requested in z
+        Calculate the marginal distribution for given variables.
 
-        Input - z - a list of one or more integers indicating the dimension(s)
-                    over which NOT to integrate.  Integrate the rest.
+        :param variables: \
+            The indices of the variable(s) for which the marginal distribution is
+            calculated, given as an integer or list of integers.
+
+        :return points, probabilities: \
+            The points at which the marginal distribution is evaluated, and the
+            associated marginal probability density.
         """
-        I = array(self.coordinates)
+        z = variables if isinstance(variables, list) else [variables]
+        coords = stack(self.coordinates)
         probs = array(self.probability)
-        probs -= probs.max()
-
-        # 1D code
-        if type(z) is int:
-            # find range of the 1D grid
-            lwr = I[:, z].min()
-            upr = I[:, z].max()
-
-            # make the grid
-            L = upr - lwr + 1
-            i_grid = linspace(lwr, upr, L, dtype=self.type)
-            P_grid = zeros(L)
-
-            for i, j in enumerate(i_grid):
-                bools = I[:, z] == j
-                if bools.any():
-                    P_grid[i] = exp(probs[bools]).sum()
-
-        # TODO - should check whether the n-dimensional code can be overhauled
-        else:  # multi-dimensional code
-            m = len(z)
-            lwr = zeros(m)  # list of starting indices
-            upr = zeros(m)  # list of ending indices
-            L = list()
-            R = list()
-            for i in range(m):
-                lwr[i] = int(I[:, z[i]].min())
-                upr[i] = int(I[:, z[i]].max())
-                L.append(int(upr[i] - lwr[i]))  # list of lengths
-                R.append(range(int(upr[i] - lwr[i])))
-                # NOTE there should be a +1 above, but something
-                # else is the wrong length somewhere... needs checking
-
-            # i_grid is a list of indices axes for each parameter
-            i_grid = list()
-            for i in range(m):
-                i_grid.append(arange(lwr[i], upr[i]))
-
-            # now make the grid to hold the marginal distribution
-            P_grid = zeros(L)
-            # now use cartesian product to create list of all indices
-            ind_list = product(*R)
-
-            # because only one coordinate is changed at a time, we could
-            # make this more efficient by storing the different boole
-            # vectors, but not needed unless this becomes a computational
-            # bottleneck.
-            for k in ind_list:
-                booles = I[:, z[0]] == (i_grid[0])[k[0]]
-                for j in range(1, m):
-                    booles = booles & (I[:, z[j]] == (i_grid[j])[k[j]])
-
-                if any(booles):
-                    inds = where(booles)
-                    P_grid[k] = exp(probs[inds]).sum()
-                else:
-                    P_grid[k] = 0
-
-        return i_grid, P_grid
+        probs = exp(probs - log(self.total_prob[-1]))
+        # find all unique sub-vectors for the marginalisation dimensions and their indices
+        uniques, inverse, counts = unique(coords[:, z], return_inverse=True, return_counts=True, axis=0)
+        # use the indices and the counts to calculate the CDF then convert to the PDF
+        marginal_pdf = probs[inverse.argsort()].cumsum()[counts.cumsum() - 1]
+        marginal_pdf[1:] -= marginal_pdf[:-1]
+        # use the spacing to properly normalise the PDF
+        marginal_pdf /= self.spacing[z].prod()
+        # convert the coordinate vectors to parameter values
+        uniques = uniques * self.spacing[None, z] + self.offset[None, z]
+        return uniques.squeeze(), marginal_pdf
 
     def generate_sample(self, n_samples: int) -> ndarray:
         """
