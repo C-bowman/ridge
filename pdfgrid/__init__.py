@@ -20,10 +20,6 @@ class PdfGrid:
     :param offset: \
         A numpy ``ndarray`` specifying the parameter values at the grid origin.
 
-    :param search_scale: \
-        The standard deviation (in grid cells) of the normal distribution used to
-        randomly select cells for evaluation when searching for maxima.
-
     :param convergence: \
         The threshold for the fractional change in total probability which is used
         to determine when the algorithm has converged.
@@ -32,7 +28,6 @@ class PdfGrid:
         spacing: ndarray,
         offset: ndarray,
         bounds=None,
-        search_scale=5.0,
         convergence=1e-3
     ):
 
@@ -65,31 +60,28 @@ class PdfGrid:
 
         # CONSTANTS
         self.n_dims = self.spacing.size  # number of parameters / dimensions
-        self.type = int16
-        self.current_cell = zeros(self.n_dims, dtype=self.type)  # Set current vector as [0,0,0,...]
-        self.neighbours = neighbour_vectors(self.n_dims, self.type)  # nearest-neighbour vectors
+        self.current_cell = zeros(self.n_dims, dtype=int16)  # Set current vector as [0,0,0,...]
+        self.neighbours = neighbour_vectors(self.n_dims, int16)  # nearest-neighbour vectors
         self.n_neighbours = self.neighbours.shape[0]  # number of nearest-neighbours
 
         # SETTINGS
         self.threshold = 1
         self.threshold_adjust_factor = sqrt(0.5) ** self.n_dims
-        self.climb_threshold = 5
-        self.search_max = int(50 * self.n_dims)
-        self.search_scale = search_scale
+        self.n_samples = 50 * 2 ** (self.n_dims - 1)
+        self.n_climbs = self.n_samples // 10
         self.convergence = convergence
 
         # DATA STORAGE
-        self.coordinates = list()
-        self.probability = list()
+        self.coordinates = []
+        self.probability = []
 
         # DECISION MAKING
         self.evaluated = set()
-        self.exterior = list()
-        self.edge_push = list()
+        self.exterior = []
+        self.edge_push = []
         self.total_prob = [0]
         self.state = "sampling"
         self.max_prob = -1e100
-        self.search_count = 0
         self.current_index = 0
         self.fill_setup = True  # a flag for setup code which only must be run once
 
@@ -105,19 +97,26 @@ class PdfGrid:
         self.threshold_levels = [0]
 
         # DIAGNOSTICS
-        self.verbose = True
+        self.report_progress = True
         self.cell_batches = list()
 
-        self.n_samples = 50
+        # find total number of cells within the bounds
+        total_cells = (self.upper_bounds - self.lower_bounds - 1).prod()
+        # ensure number of samples doesn't exceed available cells
+        self.n_samples = min(total_cells, self.n_samples)
+        # calculate the expected number of duplicates
+        expected_collisions = self.n_samples * (1 - ((total_cells - 1) / total_cells) ** (self.n_samples - 1))
+        # sample the cell coordinates
+        extra_samples = round(expected_collisions + 1) * 3
         samples = rng.integers(
             low=self.lower_bounds,
             high=self.upper_bounds,
             endpoint=True,
-            size=[self.n_samples, self.n_dims],
+            size=[self.n_samples + extra_samples, self.n_dims],
             dtype=int16
         )
-
-        self.to_evaluate = unique(samples, axis=0)
+        # remove any duplicates and create the evaluation coordinates
+        self.to_evaluate = unique(samples, axis=0)[:self.n_samples, :]
 
     def get_parameters(self) -> ndarray:
         """
@@ -158,7 +157,7 @@ class PdfGrid:
         # run the state-specific update code
         self.update_actions[self.state](log_probabilities)
 
-        if self.verbose:
+        if self.report_progress:
             self.print_status()
 
     def fill_update(self, log_probabilities: ndarray):
@@ -197,17 +196,16 @@ class PdfGrid:
         if curr_prob < log_probabilities.max():
             loc = log_probabilities.argmax()
             self.current_cell = self.to_evaluate[loc, :]
-            # need to double check this
             self.current_index = len(self.probability) - len(log_probabilities) + loc
             assert (self.coordinates[self.current_index] == self.current_cell).all()
 
-        # if the current cell is a local maximum, keep it and it will
+        # if the current cell is a local maximum, keep it, and it will
         # be switched for the next climbing start in the proposal:
         self.climb_proposal()
 
     def sampling_update(self, log_probabilities: ndarray):
         # create list of samples ordered so we can .pop() to get the highest prob
-        n_climbs = 10 if log_probabilities.size > 10 else log_probabilities.size - 1
+        n_climbs = min(self.n_climbs, log_probabilities.size - 1)
         inds = log_probabilities.argsort()[-n_climbs:]
         self.climb_starts = [(i, self.to_evaluate[i, :]) for i in inds]
         self.current_index, self.current_cell = self.climb_starts.pop()
@@ -225,7 +223,7 @@ class PdfGrid:
             if len(neighbour_set) == 0:
                 self.current_index, self.current_cell = self.climb_starts.pop()
             else:
-                self.to_evaluate = stack([frombuffer(s, dtype=self.type) for s in neighbour_set])
+                self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in neighbour_set])
                 break
         else:
             self.state = "fill"
@@ -236,16 +234,15 @@ class PdfGrid:
             # The very first time we get to fill, we need to locate all
             # relevant edge cells, i.e. those which have unevaluated neighbours
             # and are above the threshold.
-            # TODO - the probability check may be unnecessary as all cells below threshold are removed earlier
             prob_cutoff = self.max_prob - self.threshold
             iterator = zip(self.coordinates, self.exterior, self.probability)
             edge_vecs = array(
                 [v for v, ext, p in iterator if ext and p > prob_cutoff],
-                dtype=self.type,
+                dtype=int16,
             )
             self.fill_setup = False
         else:
-            edge_vecs = array(self.edge_push, dtype=self.type)
+            edge_vecs = array(self.edge_push, dtype=int16)
 
         # generate an array of all neighbours of all edge positions using outer addition via broadcasting
         r = (edge_vecs[None, :, :] + self.neighbours[:, None, :]).reshape(
@@ -265,7 +262,7 @@ class PdfGrid:
             raise ValueError("fill set empty")
         else:
             # here the set of fill vectors is converted back to an array
-            self.to_evaluate = stack([frombuffer(s, dtype=self.type) for s in fill_set])
+            self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
 
     def adjust_threshold(self):
         """
@@ -287,7 +284,7 @@ class PdfGrid:
         inds = (array(self.probability) > (self.max_prob - 2*self.threshold)).nonzero()[0]
         self.probability = [self.probability[i] for i in inds]
         self.coordinates = [self.coordinates[i] for i in inds]
-        # clean up memory for decision making data
+        # clean up memory for decision-making data
         self.evaluated.clear()
         self.exterior.clear()
         self.edge_push.clear()
