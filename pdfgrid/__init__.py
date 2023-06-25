@@ -149,7 +149,7 @@ class PdfGrid:
         self.evaluated |= {v.tobytes() for v in self.to_evaluate}
         # now update the lists which store cell information
         self.probability.extend(log_probabilities)
-        self.coordinates.extend([v for v in self.to_evaluate])  # TODO - check if list comp can be removed
+        self.coordinates.extend(self.to_evaluate)
         self.exterior.extend([True] * log_probabilities.size)
         # For diagnostic purposes, we save here the latest number of evals
         self.cell_batches.append(len(log_probabilities))
@@ -182,8 +182,6 @@ class PdfGrid:
             if delta_ptot < self.convergence:
                 self.state = "end"
                 self.ending_cleanup()
-                offset = self.threshold_evals[0]  # TODO - figure out what this does...
-                self.threshold_evals = [i - offset for i in self.threshold_evals]
                 return
 
         self.fill_proposal()
@@ -281,7 +279,7 @@ class PdfGrid:
         self.threshold += self.threshold_adjust_factor
 
     def ending_cleanup(self):
-        inds = (array(self.probability) > (self.max_prob - 2*self.threshold)).nonzero()[0]
+        inds = (array(self.probability) > (self.max_prob - self.threshold)).nonzero()[0]
         self.probability = [self.probability[i] for i in inds]
         self.coordinates = [self.coordinates[i] for i in inds]
         # clean up memory for decision-making data
