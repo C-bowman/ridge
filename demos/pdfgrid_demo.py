@@ -22,7 +22,11 @@ grid_spacing = array([0.04, 0.04, 0.02])
 grid_centre = array([0., 0., 0.])
 grid_bounds = array([[-1.5, -1.5, -0.5], [1.5, 1.5, 0.5]]).T
 
-grid = PdfGrid(spacing=grid_spacing, offset=grid_centre, bounds=grid_bounds)
+grid = PdfGrid(
+    spacing=grid_spacing,
+    offset=grid_centre,
+    bounds=grid_bounds
+)
 
 # Main GridFill loop
 t1 = perf_counter()

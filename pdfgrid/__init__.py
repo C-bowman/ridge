@@ -20,6 +20,22 @@ class PdfGrid:
     :param offset: \
         A numpy ``ndarray`` specifying the parameter values at the grid origin.
 
+    :param bounds: \
+        The bounds on the parameters values as a 2D numpy ``ndarray`` of shape
+        ``(n_parameters, 2)`` where ``bounds[:, 0]`` are the lower-bounds and
+        ``bounds[:, 1]`` are the upper-bounds.
+
+    :param n_samples: \
+        The number of cells which are uniformly sampled inside the given bounds to
+        search for high-probability regions. If unspecified, a default of 25 times
+        2 to the power of the number of parameters is used.
+
+    :param n_climbs: \
+        The number of sampled cells which are used as starting-points for climbing
+        to find high-probability regions. The highest-probability cells from the
+        sampling are used for climbing. If unspecified, a default of 10% of the
+        total number of samples is used.
+
     :param convergence: \
         The threshold for the fractional change in total probability which is used
         to determine when the algorithm has converged.
@@ -27,7 +43,9 @@ class PdfGrid:
     def __init__(self,
         spacing: ndarray,
         offset: ndarray,
-        bounds=None,
+        bounds: ndarray,
+        n_samples: int = None,
+        n_climbs: int = None,
         convergence=1e-3
     ):
 
@@ -50,13 +68,13 @@ class PdfGrid:
                 "
             )
 
-        if bounds is not None:
-            assert bounds.ndim == 2
-            assert bounds.shape == (self.spacing.size, 2)
-            assert (bounds[:, 0] < bounds[:, 1]).all()
-            self.lower_bounds = ceil((bounds[:, 0] - self.offset) / self.spacing).astype(int16)
-            self.upper_bounds = floor((bounds[:, 1] - self.offset) / self.spacing).astype(int16)
-            assert (self.lower_bounds < self.upper_bounds).all()
+        # check the validity of the bounds
+        assert bounds.ndim == 2
+        assert bounds.shape == (self.spacing.size, 2)
+        assert (bounds[:, 0] < bounds[:, 1]).all()
+        self.lower_bounds = ceil((bounds[:, 0] - self.offset) / self.spacing).astype(int16)
+        self.upper_bounds = floor((bounds[:, 1] - self.offset) / self.spacing).astype(int16)
+        assert (self.lower_bounds < self.upper_bounds).all()
 
         # CONSTANTS
         self.n_dims = self.spacing.size  # number of parameters / dimensions
@@ -67,8 +85,8 @@ class PdfGrid:
         # SETTINGS
         self.threshold = 1
         self.threshold_adjust_factor = sqrt(0.5) ** self.n_dims
-        self.n_samples = 50 * 2 ** (self.n_dims - 1)
-        self.n_climbs = self.n_samples // 10
+        self.n_samples = 25 * 2 ** self.n_dims if n_samples is None else n_samples
+        self.n_climbs = self.n_samples // 10 if n_climbs is None else min(n_climbs, self.n_samples)
         self.convergence = convergence
 
         # DATA STORAGE
