@@ -40,13 +40,10 @@ def plot_marginal_2d(points, probabilities):
     y_limits = [points[:, 1].min(), points[:, 1].max()]
 
     # get a color for each of the rectangles
-    colormap = "viridis"
-    cmap = colormaps.get_cmap(colormap)
+    cmap = colormaps["viridis"]
     rectangle_colors = cmap(probabilities / probabilities.max())
 
-    pc = PatchCollection(
-        rectangles, facecolors = rectangle_colors
-    )
+    pc = PatchCollection(rectangles, facecolors=rectangle_colors)
 
     ax.add_collection(pc)
     ax.set_xlim(x_limits)

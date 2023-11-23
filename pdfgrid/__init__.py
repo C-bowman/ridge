@@ -40,7 +40,8 @@ class PdfGrid:
         The threshold for the fractional change in total probability which is used
         to determine when the algorithm has converged.
     """
-    def __init__(self,
+    def __init__(
+        self,
         spacing: ndarray,
         offset: ndarray,
         bounds: ndarray,
@@ -279,6 +280,13 @@ class PdfGrid:
         else:
             # here the set of fill vectors is converted back to an array
             self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
+            # remove any coordinates which are outside the bounds
+            in_bounds = (
+                (self.to_evaluate >= self.lower_bounds) &
+                (self.to_evaluate <= self.upper_bounds)
+            ).all(axis=1)
+
+            self.to_evaluate = self.to_evaluate[in_bounds]
 
     def adjust_threshold(self):
         """
