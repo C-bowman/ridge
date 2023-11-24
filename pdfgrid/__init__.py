@@ -329,14 +329,14 @@ class PdfGrid:
         z = variables if isinstance(variables, list) else [variables]
         coords = stack(self.coordinates)
         probs = array(self.probability)
-        probs = exp(probs - log(self.total_prob[-1]))
+        probs = exp(probs - probs.max())
         # find all unique sub-vectors for the marginalisation dimensions and their indices
         uniques, inverse, counts = unique(coords[:, z], return_inverse=True, return_counts=True, axis=0)
         # use the indices and the counts to calculate the CDF then convert to the PDF
         marginal_pdf = probs[inverse.argsort()].cumsum()[counts.cumsum() - 1]
         marginal_pdf[1:] -= marginal_pdf[:-1]
         # use the spacing to properly normalise the PDF
-        marginal_pdf /= self.spacing[z].prod()
+        marginal_pdf /= self.spacing[z].prod() * marginal_pdf.sum()
         # convert the coordinate vectors to parameter values
         uniques = uniques * self.spacing[None, z] + self.offset[None, z]
         return uniques.squeeze(), marginal_pdf
