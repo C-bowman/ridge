@@ -7,6 +7,8 @@ from copy import copy
 import sys
 from pdfgrid.plotting import plot_convergence
 from pdfgrid.utils import neighbour_vectors
+import matplotlib.pyplot as plt
+import numpy as np
 rng = default_rng()
 
 
@@ -272,13 +274,21 @@ class PdfGrid:
         fill_set.difference_update(self.evaluated)
         # provision for all outer cells having been evaluated, so no
         # viable nearest neighbours - use full probability distribution
-        # to find all edge cells (ie. lower than threshold)
+        # to find all edge cells (i.e. lower than threshold)
         if len(fill_set) == 0:
             self.adjust_threshold()
             raise ValueError("fill set empty")
         else:
             # here the set of fill vectors is converted back to an array
             self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
+
+            # TODO bounds enforcement here
+            in_bounds = np.all((self.to_evaluate >= self.lower_bounds) & (self.to_evaluate <= self.upper_bounds), axis=1)
+
+            self.to_evaluate = self.to_evaluate[in_bounds]
+
+            y = 0
+
 
     def adjust_threshold(self):
         """
@@ -290,7 +300,7 @@ class PdfGrid:
         self.threshold_evals.append(len(self.probability))
 
         prob_cutoff = self.max_prob - self.threshold
-        lower_lim = prob_cutoff - 2*self.threshold_adjust_factor
+        lower_lim = prob_cutoff - 1*self.threshold_adjust_factor
         self.edge_push = [
             v for v, p in zip(self.coordinates, self.probability) if lower_lim < p < prob_cutoff
         ]
@@ -298,7 +308,29 @@ class PdfGrid:
 
     def ending_cleanup(self):
         inds = (array(self.probability) > (self.max_prob - self.threshold)).nonzero()[0]
+        """
+        probability_values = np.array(self.probability)
+        deleted = exp(probability_values[(probability_values <= (self.max_prob - self.threshold))])
+        kept = exp(probability_values[(probability_values > (self.max_prob - self.threshold))])
+        kept_percent = (len(kept) / len(probability_values)) * 100
+        probability_values = exp(probability_values)
+
+        # Plotting a shared histogram
+        plt.figure(figsize=(10, 6))
+
+        plt.hist(deleted, bins=50, alpha=0.5, label='Deleted')
+        plt.hist(kept, bins=50, alpha=0.5, label='Kept')
+        plt.hist(probability_values, bins=50, alpha=0.5, label='Probs')
+
+        plt.title(f'Percentage of Evaluations Kept = {kept_percent}')
+        plt.xlabel('Probability Value')
+        plt.ylabel('Frequency')
+        plt.legend()
+
+        plt.show()
+        """
         self.probability = [self.probability[i] for i in inds]
+        # TODO array of coordinates
         self.coordinates = [self.coordinates[i] for i in inds]
         # clean up memory for decision-making data
         self.evaluated.clear()
@@ -314,7 +346,7 @@ class PdfGrid:
     def plot_convergence(self):
         plot_convergence(self.threshold_evals, self.threshold_probs)
 
-    def get_marginal(self, variables: list[int]) -> tuple[ndarray, ndarray]:
+    def get_marginal(self, variables: list):
         """
         Calculate the marginal distribution for given variables.
 
@@ -341,7 +373,7 @@ class PdfGrid:
         uniques = uniques * self.spacing[None, z] + self.offset[None, z]
         return uniques.squeeze(), marginal_pdf
 
-    def generate_sample(self, n_samples: int) -> ndarray:
+    def generate_sample(self, HardLimit, n_samples: int) -> ndarray:
         """
         Generate samples by approximating the PDF using nearest-neighbour
         interpolation around the evaluated grid cells.
@@ -367,4 +399,25 @@ class PdfGrid:
             high=0.5*self.spacing,
             size=[n_samples, self.n_dims]
         )
+
+        import numpy as np
+
+        # Check if the samples are within the hard limits
+        selection_resample = np.logical_or(
+            np.any(sample < HardLimit.lwr, axis=1),
+            np.any(sample > HardLimit.upr, axis=1)
+        )
+
+        while np.sum(selection_resample) > 0:
+            sample[selection_resample, :] = params[indices[selection_resample], :] + rng.uniform(
+                low=-0.5 * self.spacing,
+                high=0.5 * self.spacing,
+                size=[np.sum(selection_resample), self.n_dims]
+            )
+            # Check again if the new samples are within the hard limits
+            selection_resample = np.logical_or(
+                np.any(sample < HardLimit.lwr, axis=1),
+                np.any(sample > HardLimit.upr, axis=1)
+            )
+
         return sample

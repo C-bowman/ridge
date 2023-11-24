@@ -1,7 +1,7 @@
 from numpy import append, delete, floor, ndarray, zeros
 
 
-def neighbour_vectors(n: int, dtype, cutoff=1, include_center=False) -> ndarray:
+def neighbour_vectors(n: int, dtype, cutoff=2, include_center=False) -> ndarray:
     """
     Generates nearest neighbour list offsets from center cell
     """
