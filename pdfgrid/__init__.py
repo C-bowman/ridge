@@ -47,7 +47,7 @@ class PdfGrid:
         bounds: ndarray,
         n_samples: int = None,
         n_climbs: int = None,
-        convergence=1e-3
+        convergence: float = 0.05
     ):
 
         self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
@@ -182,26 +182,37 @@ class PdfGrid:
     def fill_update(self, log_probabilities: ndarray):
         # add cells that are higher than threshold to edge_push
         prob_cutoff = self.max_prob - self.threshold
+        above = log_probabilities > prob_cutoff
+        if above.any():
+            self.edge_push = self.to_evaluate[above]
+        else:
 
-        self.edge_push = [
-            v for v, p in zip(self.to_evaluate, log_probabilities) if p > prob_cutoff
-        ]
+            # first collect stats
+            self.threshold_levels.append(copy(self.threshold))
+            self.threshold_probs.append(self.total_prob[-1])
+            self.threshold_evals.append(len(self.probability))
 
-        # if there are no cells above threshold, so lower it (or terminate)
-        if len(self.edge_push) == 0:
-            self.adjust_threshold()
+            if self.threshold_probs[-2] != 0.0:
+                p1, p2 = self.threshold_probs[-2:]
+                n1, n2 = self.threshold_evals[-2:]
+                dn = n2 / n1 - 1.0
+                dp = p2 / p1 - 1.0
+                if (dp / dn) < self.convergence:
+                    self.state = "end"
+                    self.ending_cleanup()
+                    return
 
-            if self.threshold_probs[-2] == 0.0:
-                delta_ptot = 1.0
-            else:
-                delta_ptot = (
-                    self.threshold_probs[-1] - self.threshold_probs[-2]
-                ) / self.threshold_probs[-2]
+            p = array(self.probability)
+            below_old = p < prob_cutoff
+            # determine how much the threshold needs to be lowered
+            multiplier = 1 + (prob_cutoff - p[below_old].max()) // self.threshold_adjust_factor
 
-            if delta_ptot < self.convergence:
-                self.state = "end"
-                self.ending_cleanup()
-                return
+            self.threshold += multiplier * self.threshold_adjust_factor
+            prob_cutoff = self.max_prob - self.threshold
+
+            above_new = p > prob_cutoff
+            push = below_old & above_new
+            self.edge_push = array([self.coordinates[i] for i in push.nonzero()[0]])
 
         self.fill_proposal()
 
@@ -253,17 +264,15 @@ class PdfGrid:
             # and are above the threshold.
             prob_cutoff = self.max_prob - self.threshold
             iterator = zip(self.coordinates, self.exterior, self.probability)
-            edge_vecs = array(
+            self.edge_push = array(
                 [v for v, ext, p in iterator if ext and p > prob_cutoff],
                 dtype=int16,
             )
             self.fill_setup = False
-        else:
-            edge_vecs = array(self.edge_push, dtype=int16)
 
         # generate an array of all neighbours of all edge positions using outer addition via broadcasting
-        r = (edge_vecs[None, :, :] + self.neighbours[:, None, :]).reshape(
-            edge_vecs.shape[0] * self.neighbours.shape[0], self.n_dims
+        r = (self.edge_push[None, :, :] + self.neighbours[:, None, :]).reshape(
+            self.edge_push.shape[0] * self.neighbours.shape[0], self.n_dims
         )
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
@@ -275,7 +284,6 @@ class PdfGrid:
         # viable nearest neighbours - use full probability distribution
         # to find all edge cells (ie. lower than threshold)
         if len(fill_set) == 0:
-            self.adjust_threshold()
             raise ValueError("fill set empty")
         else:
             # here the set of fill vectors is converted back to an array
@@ -288,22 +296,6 @@ class PdfGrid:
 
             self.to_evaluate = self.to_evaluate[in_bounds]
 
-    def adjust_threshold(self):
-        """
-        Adjust the threshold to a new value that is threshold + threshold_adjust_factor
-        """
-        # first collect stats
-        self.threshold_levels.append(copy(self.threshold))
-        self.threshold_probs.append(self.total_prob[-1])
-        self.threshold_evals.append(len(self.probability))
-
-        prob_cutoff = self.max_prob - self.threshold
-        lower_lim = prob_cutoff - 2*self.threshold_adjust_factor
-        self.edge_push = [
-            v for v, p in zip(self.coordinates, self.probability) if lower_lim < p < prob_cutoff
-        ]
-        self.threshold += self.threshold_adjust_factor
-
     def ending_cleanup(self):
         inds = (array(self.probability) > (self.max_prob - self.threshold)).nonzero()[0]
         self.probability = [self.probability[i] for i in inds]
@@ -311,8 +303,8 @@ class PdfGrid:
         # clean up memory for decision-making data
         self.evaluated.clear()
         self.exterior.clear()
-        self.edge_push.clear()
-        self.to_evaluate = 0.
+        self.edge_push = None
+        self.to_evaluate = None
 
     def print_status(self):
         msg = f"\r [ {len(self.probability)} total evaluations, state is {self.state} ]"
