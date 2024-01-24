@@ -281,13 +281,10 @@ class PdfGrid:
         else:
             # here the set of fill vectors is converted back to an array
             self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
-
-            # TODO bounds enforcement here
+            # remove any coordinates which are outside the bounds
             in_bounds = np.all((self.to_evaluate >= self.lower_bounds) & (self.to_evaluate <= self.upper_bounds), axis=1)
 
             self.to_evaluate = self.to_evaluate[in_bounds]
-
-            y = 0
 
 
     def adjust_threshold(self):
@@ -318,11 +315,10 @@ class PdfGrid:
         # Plotting a shared histogram
         plt.figure(figsize=(10, 6))
 
-        plt.hist(deleted, bins=50, alpha=0.5, label='Deleted')
-        plt.hist(kept, bins=50, alpha=0.5, label='Kept')
-        plt.hist(probability_values, bins=50, alpha=0.5, label='Probs')
+        plt.hist(probability_values, bins=50, alpha=0.5)
 
         plt.title(f'Percentage of Evaluations Kept = {kept_percent}')
+        plt.axvline(exp(self.max_prob - self.threshold))
         plt.xlabel('Probability Value')
         plt.ylabel('Frequency')
         plt.legend()
