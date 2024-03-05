@@ -1,0 +1,81 @@
+from numpy import linspace, exp, pi
+from numpy import sqrt, array, eye, ndarray
+from numpy.linalg import cholesky
+from scipy.linalg import solve_triangular
+import matplotlib.pyplot as plt
+
+from pdfgrid import PdfGrid
+from pdfgrid.plotting import plot_marginal_2d
+
+
+"""
+Test case using a 4D correlated multivariate normal distribution
+defined using a Gaussian-process.
+"""
+
+
+class GaussianProcessPosterior:
+    def __init__(self, dimensions: int, scale: float = 1.0):
+        self.n = dimensions
+        self.x = linspace(1, self.n, self.n)
+        self.L = scale
+
+        dx = self.x[:, None] - self.x[None, :]
+        self.K = exp(-0.5 * dx ** 2 / self.L ** 2)
+
+        L = cholesky(self.K)
+        self.iK = solve_triangular(L, eye(self.n), lower=True)
+        self.iK = self.iK.T @ self.iK
+
+    def __call__(self, theta: ndarray) -> float:
+        return -0.5 * theta.T @ self.iK @ theta
+
+
+# set up the test-case posterior
+dims = 4
+posterior = GaussianProcessPosterior(dimensions=dims, scale=1.5)
+
+# specify settings for the grid
+grid_spacing = array([0.2] * dims)
+grid_centre = array([0.] * dims)
+grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
+
+# create a PdfGrid instance
+grid = PdfGrid(
+    spacing=grid_spacing,
+    offset=grid_centre,
+    bounds=grid_bounds,
+    convergence=0.01
+)
+
+while grid.state != "end":
+    # get the next batch of parameter evaluations
+    params = grid.get_parameters()
+    # evaluate the posterior log-probabilities
+    P = array([posterior(theta) for theta in params])
+    # pass the log-probabilities back to PdfGrid
+    grid.give_probabilities(P)
+
+# evaluate the marginal for the first dimension
+points, probs = grid.get_marginal([0])
+
+# evaluate the marginal analytically for comparison
+axis = linspace(-20, 20, 41) * 0.2
+exact_marginal = exp(-0.5 * axis**2) / sqrt(2 * pi)
+
+# plot the marginal to verify the result
+plt.plot(points, probs, label="pdf-grid marginal")
+plt.plot(axis, exact_marginal, marker="o", ls="none", markerfacecolor="none", label="exact marginal")
+plt.grid()
+plt.legend()
+plt.ylim([0, None])
+plt.ylabel("probability density")
+plt.tight_layout()
+plt.show()
+
+# evaluate and plot the 2D marginal for the first and second dimensions
+points, probs = grid.get_marginal([0, 1])
+plot_marginal_2d(points=points, probabilities=probs, labels=["x", "y"])
+
+# plot the convergence information
+grid.plot_convergence()
