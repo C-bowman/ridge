@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
@@ -28,8 +29,7 @@ def plot_convergence(evaluations, probabilities):
     plt.show()
 
 
-def plot_marginal_2d(points, probabilities):
-
+def plot_marginal_2d(points: ndarray, probabilities: ndarray, labels: list[str] = None):
     spacing = array([find_spacing(v) for v in points.T])
 
     fig = plt.figure()
@@ -48,6 +48,11 @@ def plot_marginal_2d(points, probabilities):
     ax.add_collection(pc)
     ax.set_xlim(x_limits)
     ax.set_ylim(y_limits)
+
+    if isinstance(labels, Sequence) and len(labels) >= 2:
+        ax.set_xlabel(labels[0])
+        ax.set_ylabel(labels[1])
+
     plt.tight_layout()
     plt.show()
 
