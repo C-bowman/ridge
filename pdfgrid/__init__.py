@@ -252,6 +252,11 @@ class PdfGrid:
                 self.current_index, self.current_cell = self.climb_starts.pop()
             else:
                 self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in neighbour_set])
+                in_bounds = (
+                        (self.to_evaluate >= self.lower_bounds) &
+                        (self.to_evaluate <= self.upper_bounds)
+                ).all(axis=1)
+                self.to_evaluate = self.to_evaluate[in_bounds]
                 break
         else:
             self.state = "fill"
