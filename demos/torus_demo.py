@@ -52,5 +52,9 @@ plt.show()
 points, probs = grid.get_marginal([0, 1])
 plot_marginal_2d(points=points, probabilities=probs, labels=["x", "y"])
 
+# evaluate and plot the 2D marginal for the first and third dimensions
+points, probs = grid.get_marginal([0, 2])
+plot_marginal_2d(points=points, probabilities=probs, labels=["x", "z"])
+
 # plot the convergence information
 grid.plot_convergence()
