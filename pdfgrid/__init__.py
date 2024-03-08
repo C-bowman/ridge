@@ -44,9 +44,10 @@ class PdfGrid:
         self,
         spacing: ndarray,
         offset: ndarray,
-        bounds: ndarray,
+        bounds: ndarray = None,
         n_samples: int = None,
         n_climbs: int = None,
+        initial_guesses: ndarray = None,
         convergence: float = 0.05
     ):
 
@@ -118,6 +119,8 @@ class PdfGrid:
         # DIAGNOSTICS
         self.report_progress = True
         self.cell_batches = list()
+
+        self.bounds_check = self.enforce_bounds
 
         # find total number of cells within the bounds
         total_cells = (self.upper_bounds - self.lower_bounds - 1).prod()
@@ -245,20 +248,22 @@ class PdfGrid:
 
     def climb_proposal(self):
         while len(self.climb_starts) > 0:
+            # build a set of all the neighbours of the current cell
             neighbour_set = {v.tobytes() for v in self.current_cell[None, :] + self.neighbours}
+            # remove any neighbours which are already evaluated
             neighbour_set -= self.evaluated
 
-            if len(neighbour_set) == 0:
-                self.current_index, self.current_cell = self.climb_starts.pop()
-            else:
+            # if there are unevaluated neighbours we prepare them for evaluation
+            if len(neighbour_set) != 0:
                 self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in neighbour_set])
-                in_bounds = (
-                        (self.to_evaluate >= self.lower_bounds) &
-                        (self.to_evaluate <= self.upper_bounds)
-                ).all(axis=1)
-                self.to_evaluate = self.to_evaluate[in_bounds]
-                break
-        else:
+                self.to_evaluate = self.enforce_bounds(self.to_evaluate)
+                if self.to_evaluate.size != 0:
+                    break
+
+            # if there are no neighbours to evaluate, we swap to a new starting position
+            self.current_index, self.current_cell = self.climb_starts.pop()
+
+        else:  # once we've run out of starting positions to climb from, we switch to fill
             self.state = "fill"
             self.fill_proposal()
 
@@ -279,6 +284,7 @@ class PdfGrid:
         r = (self.edge_push[None, :, :] + self.neighbours[:, None, :]).reshape(
             self.edge_push.shape[0] * self.neighbours.shape[0], self.n_dims
         )
+        print("r shape", r.shape)
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
         fill_set = {v.tobytes() for v in r}
@@ -294,12 +300,9 @@ class PdfGrid:
             # here the set of fill vectors is converted back to an array
             self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
             # remove any coordinates which are outside the bounds
-            in_bounds = (
-                (self.to_evaluate >= self.lower_bounds) &
-                (self.to_evaluate <= self.upper_bounds)
-            ).all(axis=1)
-
-            self.to_evaluate = self.to_evaluate[in_bounds]
+            self.to_evaluate = self.enforce_bounds(self.to_evaluate)
+            if self.to_evaluate.size == 0:
+                raise ValueError("no points to evaluate in fill_proposal after bounds enforced")
 
     def ending_cleanup(self):
         inds = (array(self.probability) > (self.max_prob - self.threshold)).nonzero()[0]
@@ -310,6 +313,17 @@ class PdfGrid:
         self.exterior.clear()
         self.edge_push = None
         self.to_evaluate = None
+
+    def enforce_bounds(self, points: ndarray) -> ndarray:
+        in_bounds = (
+                (points >= self.lower_bounds) &
+                (points <= self.upper_bounds)
+        ).all(axis=1)
+
+        return points[in_bounds]
+
+    def skip_bounds(self, points: ndarray):
+        return points
 
     def print_status(self):
         msg = f"\r [ {len(self.probability)} total evaluations, state is {self.state} ]"
