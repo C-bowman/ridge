@@ -8,6 +8,7 @@ from copy import copy
 import sys
 from pdfgrid.plotting import plot_convergence
 from pdfgrid.utils import neighbour_vectors, uniform_grid_sample
+
 rng = default_rng()
 
 
@@ -26,16 +27,18 @@ class PdfGrid:
         ``(n_parameters, 2)`` where ``bounds[:, 0]`` are the lower-bounds and
         ``bounds[:, 1]`` are the upper-bounds.
 
-    :param n_samples: \
-        The number of cells which are uniformly sampled inside the given bounds to
-        search for high-probability regions. If unspecified, a default of 25 times
-        2 to the power of the number of parameters is used.
+    :param initial_guesses: \
+        The initial guesses can be given as a 2D numpy ``ndarray`` of
+        shape ``(n_guesses, n_parameters)``. Alternatively if ``bounds`` have been
+        specified, ``initial_guesses`` can be given as an integer specifying a
+        number of samples drawn uniformly inside the bounds which will be used
+        as the initial guesses.
 
     :param n_climbs: \
-        The number of sampled cells which are used as starting-points for climbing
+        The number of initial guesses which are used as starting-points for climbing
         to find high-probability regions. The highest-probability cells from the
-        sampling are used for climbing. If unspecified, a default of 10% of the
-        total number of samples is used.
+        guesses are used for climbing. If unspecified, a default of 10% of the
+        total number of initial guesses is used.
 
     :param convergence: \
         The threshold for the fractional change in total probability which is used
@@ -47,8 +50,8 @@ class PdfGrid:
         spacing: ndarray,
         offset: ndarray,
         bounds: ndarray = None,
-        n_climbs: int = None,
         initial_guesses: Union[int, ndarray] = None,
+        n_climbs: int = None,
         convergence: float = 0.05,
     ):
         self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
