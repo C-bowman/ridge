@@ -25,7 +25,7 @@ class GaussianProcessPosterior:
 def test_marginalisation():
     # set up the test-case posterior
     dims = 4
-    posterior = GaussianProcessPosterior(dimensions=dims, scale=1.0)
+    posterior = GaussianProcessPosterior(dimensions=dims, scale=1.5)
 
     # specify settings for the grid
     grid_spacing = array([0.2] * dims)
@@ -47,7 +47,6 @@ def test_marginalisation():
     points, probs = grid.get_marginal([0])
 
     # evaluate the marginal analytically for comparison
-    axis = linspace(-20, 20, 41) * 0.2
     exact_marginal = exp(-0.5 * points**2) / sqrt(2 * pi)
 
     # verify the computed marginal agrees with the analytic result
