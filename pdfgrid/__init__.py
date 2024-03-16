@@ -169,6 +169,13 @@ class PdfGrid:
             else min(n_climbs, self.n_samples)
         )
 
+    def evaluate_posterior(self, posterior: callable):
+        while self.state != "end":
+            # evaluate the posterior log-probabilities
+            p = array([posterior(theta) for theta in self.get_parameters()])
+            # pass the log-probabilities back
+            self.give_probabilities(p)
+
     def get_parameters(self) -> ndarray:
         """
         Get the parameter vectors for which the posterior log-probability needs to be
