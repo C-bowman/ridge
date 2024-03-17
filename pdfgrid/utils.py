@@ -62,3 +62,27 @@ def uniform_grid_sample(
     )
     # remove any duplicates
     return unique(samples, axis=0)[:n_samples, :]
+
+
+def compute_marginal(
+    coords: ndarray, probs: ndarray, spacing: ndarray, offset: ndarray, z: list[int]
+) -> tuple[ndarray, ndarray]:
+    """
+    Calculate the marginal distribution for given variables.
+
+    :return points, probabilities: \
+        The points at which the marginal distribution is evaluated, and the
+        associated marginal probability density.
+    """
+    # find all unique sub-vectors for the marginalisation dimensions and their indices
+    uniques, inverse, counts = unique(
+        coords[:, z], return_inverse=True, return_counts=True, axis=0
+    )
+    # use the indices and the counts to calculate the CDF then convert to the PDF
+    marginal_pdf = probs[inverse.argsort()].cumsum()[counts.cumsum() - 1]
+    marginal_pdf[1:] -= marginal_pdf[:-1]
+    # use the spacing to properly normalise the PDF
+    marginal_pdf /= spacing[z].prod() * marginal_pdf.sum()
+    # convert the coordinate vectors to parameter values
+    uniques = uniques * spacing[None, z] + offset[None, z]
+    return uniques.squeeze(), marginal_pdf

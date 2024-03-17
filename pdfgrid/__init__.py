@@ -1,13 +1,12 @@
 from numpy import sqrt, log, exp, floor, ceil, round
 from numpy import array, zeros, frombuffer, stack
-from numpy import unique
 from numpy import int16, ndarray
 from numpy.random import default_rng
 from typing import Union
 from copy import copy
 import sys
-from pdfgrid.plotting import plot_convergence
-from pdfgrid.utils import neighbour_vectors, uniform_grid_sample
+from pdfgrid.plotting import plot_convergence, matrix_plot
+from pdfgrid.utils import neighbour_vectors, uniform_grid_sample, compute_marginal
 
 rng = default_rng()
 
@@ -385,6 +384,45 @@ class PdfGrid:
     def plot_convergence(self):
         plot_convergence(self.threshold_evals, self.threshold_probs)
 
+    def matrix_plot(self, **kwargs):
+        """
+        Construct a 'matrix plot' of the parameters which shows all possible
+        1D and 2D marginal distributions.
+
+        :keyword labels: \
+            A list of strings to be used as axis labels for each parameter being plotted.
+
+        :keyword bool show: \
+            Sets whether the plot is displayed.
+
+        :keyword reference: \
+            A list of reference values for each parameter which will be over-plotted.
+
+        :keyword str filename: \
+            File path to which the matrix plot will be saved (if specified).
+
+        :keyword str colormap: \
+            Name of a ``matplotlib`` colormap to be used for the plots.
+
+        :keyword bool show_ticks: \
+            By default, axis ticks are only shown when plotting less than 6 variables.
+            This behaviour can be overridden for any number of parameters by setting
+            show_ticks to either True or False.
+
+        :keyword int label_size: \
+            The font-size used for axis labels.
+        """
+        coords = stack(self.coordinates)
+        probs = array(self.probability)
+        probs = exp(probs - probs.max())
+        matrix_plot(
+            coords=coords,
+            probs=probs,
+            spacing=self.spacing,
+            offset=self.offset,
+            **kwargs
+        )
+
     def get_marginal(self, variables: list[int]) -> tuple[ndarray, ndarray]:
         """
         Calculate the marginal distribution for given variables.
@@ -401,18 +439,13 @@ class PdfGrid:
         coords = stack(self.coordinates)
         probs = array(self.probability)
         probs = exp(probs - probs.max())
-        # find all unique sub-vectors for the marginalisation dimensions and their indices
-        uniques, inverse, counts = unique(
-            coords[:, z], return_inverse=True, return_counts=True, axis=0
+        return compute_marginal(
+            coords=coords,
+            probs=probs,
+            spacing=self.spacing,
+            offset=self.offset,
+            z=z
         )
-        # use the indices and the counts to calculate the CDF then convert to the PDF
-        marginal_pdf = probs[inverse.argsort()].cumsum()[counts.cumsum() - 1]
-        marginal_pdf[1:] -= marginal_pdf[:-1]
-        # use the spacing to properly normalise the PDF
-        marginal_pdf /= self.spacing[z].prod() * marginal_pdf.sum()
-        # convert the coordinate vectors to parameter values
-        uniques = uniques * self.spacing[None, z] + self.offset[None, z]
-        return uniques.squeeze(), marginal_pdf
 
     def generate_sample(self, n_samples: int) -> ndarray:
         """
