@@ -1,7 +1,6 @@
 from numpy import sqrt, array
 import matplotlib.pyplot as plt
 from pdfgrid import PdfGrid
-from pdfgrid.plotting import plot_marginal_2d
 
 
 class ToroidalGaussian:
@@ -28,17 +27,12 @@ grid_bounds = array([[-1.5, -1.5, -0.5], [1.5, 1.5, 0.5]]).T
 grid = PdfGrid(
     spacing=grid_spacing,
     offset=grid_centre,
-    bounds=grid_bounds
+    bounds=grid_bounds,
+    convergence=0.02
 )
 
-while grid.state != "end":
-    # get the next batch of parameter evaluations
-    params = grid.get_parameters()
-    # evaluate the posterior log-probabilities
-    P = array([posterior(theta) for theta in params])
-    # pass the log-probabilities back to PdfGrid
-    grid.give_probabilities(P)
-
+# evaluate the posterior
+grid.evaluate_posterior(posterior=posterior)
 
 # evaluate and plot the marginal for the first dimension
 points, probs = grid.get_marginal([0])
@@ -48,13 +42,8 @@ plt.ylim([0, None])
 plt.tight_layout()
 plt.show()
 
-# evaluate and plot the 2D marginal for the first and second dimensions
-points, probs = grid.get_marginal([0, 1])
-plot_marginal_2d(points=points, probabilities=probs, labels=["x", "y"])
-
-# evaluate and plot the 2D marginal for the first and third dimensions
-points, probs = grid.get_marginal([0, 2])
-plot_marginal_2d(points=points, probabilities=probs, labels=["x", "z"])
+# We can also use the matrix_plot method to plot all 1D and 2D marginal distributions
+grid.matrix_plot(labels=["x", "y", "z"], colormap="viridis")
 
 # plot the convergence information
 grid.plot_convergence()
