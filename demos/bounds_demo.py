@@ -27,7 +27,7 @@ posterior = RingGaussian()
 # specify settings for the grid
 grid_spacing = array([0.03, 0.03])
 grid_centre = array([0., 0.])
-grid_bounds = array([[-0.5, -0.5], [1.5, 1.5]]).T
+grid_bounds = array([[-0.5, 0.], [1.5, 1.5]]).T
 
 grid = PdfGrid(
     spacing=grid_spacing,
@@ -35,18 +35,13 @@ grid = PdfGrid(
     bounds=grid_bounds
 )
 
-while grid.state != "end":
-    # get the next batch of parameter evaluations
-    params = grid.get_parameters()
-    # evaluate the posterior log-probabilities
-    P = array([posterior(theta) for theta in params])
-    # pass the log-probabilities back to PdfGrid
-    grid.give_probabilities(P)
-
+# evaluate the posterior
+grid.evaluate_posterior(posterior=posterior)
 
 # evaluate and plot the 1D marginal distribution for the first parameter
 points, probs = grid.get_marginal([0])
-plt.plot(points, probs)
+plt.plot(points, probs, lw=2)
+plt.fill_between(points, 0., probs, color="C0", alpha=0.1)
 plt.grid()
 plt.ylim([0, None])
 plt.xlabel("x")
