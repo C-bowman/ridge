@@ -29,3 +29,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/C-bowman/pdf-grid"
+
+[project.optional-dependencies]
+tests = [
+    "pytest >= 3.3.0",
+    "pytest-cov >= 3.0.0",
+]

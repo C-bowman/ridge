@@ -5,7 +5,6 @@ from scipy.linalg import solve_triangular
 import matplotlib.pyplot as plt
 
 from pdfgrid import PdfGrid
-from pdfgrid.plotting import plot_marginal_2d
 
 
 """
@@ -48,13 +47,8 @@ grid = PdfGrid(
     convergence=0.01
 )
 
-while grid.state != "end":
-    # get the next batch of parameter evaluations
-    params = grid.get_parameters()
-    # evaluate the posterior log-probabilities
-    P = array([posterior(theta) for theta in params])
-    # pass the log-probabilities back to PdfGrid
-    grid.give_probabilities(P)
+# evaluate the posterior
+grid.evaluate_posterior(posterior=posterior)
 
 # evaluate the marginal for the first dimension
 points, probs = grid.get_marginal([0])
@@ -69,13 +63,13 @@ plt.plot(axis, exact_marginal, marker="o", ls="none", markerfacecolor="none", la
 plt.grid()
 plt.legend()
 plt.ylim([0, None])
+plt.xlabel("x0")
 plt.ylabel("probability density")
 plt.tight_layout()
 plt.show()
 
-# evaluate and plot the 2D marginal for the first and second dimensions
-points, probs = grid.get_marginal([0, 1])
-plot_marginal_2d(points=points, probabilities=probs, labels=["x", "y"])
+# We can also use the matrix_plot method to plot all 1D and 2D marginal distributions
+grid.matrix_plot(labels=["x0", "x1", "x2", "x3"])
 
 # plot the convergence information
 grid.plot_convergence()

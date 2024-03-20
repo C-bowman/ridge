@@ -1,12 +1,13 @@
-from numpy import sqrt, log, exp, floor, ceil
+from numpy import sqrt, log, exp, floor, ceil, round
 from numpy import array, zeros, frombuffer, stack
-from numpy import unique
 from numpy import int16, ndarray
 from numpy.random import default_rng
+from typing import Union
 from copy import copy
 import sys
-from pdfgrid.plotting import plot_convergence
-from pdfgrid.utils import neighbour_vectors
+from pdfgrid.plotting import plot_convergence, matrix_plot
+from pdfgrid.utils import neighbour_vectors, uniform_grid_sample, compute_marginal
+
 rng = default_rng()
 
 
@@ -25,31 +26,33 @@ class PdfGrid:
         ``(n_parameters, 2)`` where ``bounds[:, 0]`` are the lower-bounds and
         ``bounds[:, 1]`` are the upper-bounds.
 
-    :param n_samples: \
-        The number of cells which are uniformly sampled inside the given bounds to
-        search for high-probability regions. If unspecified, a default of 25 times
-        2 to the power of the number of parameters is used.
+    :param initial_guesses: \
+        The initial guesses can be given as a 2D numpy ``ndarray`` of
+        shape ``(n_guesses, n_parameters)``. Alternatively if ``bounds`` have been
+        specified, ``initial_guesses`` can be given as an integer specifying a
+        number of samples drawn uniformly inside the bounds which will be used
+        as the initial guesses.
 
     :param n_climbs: \
-        The number of sampled cells which are used as starting-points for climbing
+        The number of initial guesses which are used as starting-points for climbing
         to find high-probability regions. The highest-probability cells from the
-        sampling are used for climbing. If unspecified, a default of 10% of the
-        total number of samples is used.
+        guesses are used for climbing. If unspecified, a default of 10% of the
+        total number of initial guesses is used.
 
     :param convergence: \
         The threshold for the fractional change in total probability which is used
         to determine when the algorithm has converged.
     """
+
     def __init__(
         self,
         spacing: ndarray,
         offset: ndarray,
-        bounds: ndarray,
-        n_samples: int = None,
+        bounds: ndarray = None,
+        initial_guesses: Union[int, ndarray] = None,
         n_climbs: int = None,
-        convergence: float = 0.05
+        convergence: float = 0.05,
     ):
-
         self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
         self.offset = offset if isinstance(offset, ndarray) else array(offset)
 
@@ -69,25 +72,32 @@ class PdfGrid:
                 "
             )
 
-        # check the validity of the bounds
-        assert bounds.ndim == 2
-        assert bounds.shape == (self.spacing.size, 2)
-        assert (bounds[:, 0] < bounds[:, 1]).all()
-        self.lower_bounds = ceil((bounds[:, 0] - self.offset) / self.spacing).astype(int16)
-        self.upper_bounds = floor((bounds[:, 1] - self.offset) / self.spacing).astype(int16)
-        assert (self.lower_bounds < self.upper_bounds).all()
+        if bounds is not None:
+            # check the validity of the bounds
+            assert bounds.ndim == 2
+            assert bounds.shape == (self.spacing.size, 2)
+            assert (bounds[:, 0] < bounds[:, 1]).all()
+            # convert the bounds to grid coordinates
+            bounds = (bounds - self.offset[:, None]) / self.spacing[:, None]
+            self.lower_bounds = ceil(bounds[:, 0]).astype(int16)
+            self.upper_bounds = floor(bounds[:, 1]).astype(int16)
+            # verify bounds are still valid after conversion
+            assert (self.lower_bounds < self.upper_bounds).all()
+            self.bounds_check = self.enforce_bounds
+        else:
+            self.lower_bounds = None
+            self.upper_bounds = None
+            self.bounds_check = self.skip_bounds
 
         # CONSTANTS
         self.n_dims = self.spacing.size  # number of parameters / dimensions
-        self.current_cell = zeros(self.n_dims, dtype=int16)  # Set current vector as [0,0,0,...]
-        self.neighbours = neighbour_vectors(self.n_dims, int16)  # nearest-neighbour vectors
+        self.current_cell = zeros(self.n_dims, dtype=int16)
+        self.neighbours = neighbour_vectors(self.n_dims, int16)
         self.n_neighbours = self.neighbours.shape[0]  # number of nearest-neighbours
 
         # SETTINGS
         self.threshold = 1
         self.threshold_adjust_factor = sqrt(0.5) ** self.n_dims
-        self.n_samples = 25 * 2 ** self.n_dims if n_samples is None else n_samples
-        self.n_climbs = self.n_samples // 10 if n_climbs is None else min(n_climbs, self.n_samples)
         self.convergence = convergence
 
         # DATA STORAGE
@@ -119,23 +129,51 @@ class PdfGrid:
         self.report_progress = True
         self.cell_batches = list()
 
-        # find total number of cells within the bounds
-        total_cells = (self.upper_bounds - self.lower_bounds - 1).prod()
-        # ensure number of samples doesn't exceed available cells
-        self.n_samples = min(total_cells, self.n_samples)
-        # calculate the expected number of duplicates
-        expected_collisions = self.n_samples * (1 - ((total_cells - 1) / total_cells) ** (self.n_samples - 1))
-        # sample the cell coordinates
-        extra_samples = round(expected_collisions + 1) * 3
-        samples = rng.integers(
-            low=self.lower_bounds,
-            high=self.upper_bounds,
-            endpoint=True,
-            size=[self.n_samples + extra_samples, self.n_dims],
-            dtype=int16
+        # determine how the problem is initialised
+        if isinstance(initial_guesses, ndarray):
+            # if guesses are provided as an array, check they have the correct shape
+            assert initial_guesses.ndim == 2
+            assert initial_guesses.shape[1] == self.n_dims
+            self.n_samples = initial_guesses.shape[0]
+            # convert the guesses from parameter values to grid coordinates
+            self.to_evaluate = round(
+                (initial_guesses - self.offset[None, :]) / self.spacing[None, :]
+            ).astype(int16)
+
+        elif bounds is not None:
+            self.n_samples = (
+                initial_guesses
+                if isinstance(initial_guesses, int)
+                else 25 * 2**self.n_dims
+            )
+            self.to_evaluate = uniform_grid_sample(
+                lower_bounds=self.lower_bounds,
+                upper_bounds=self.upper_bounds,
+                n_samples=self.n_samples,
+                n_dims=self.n_dims,
+            )
+        else:
+            raise ValueError(
+                """\n
+                \r[ PdfGrid error ]
+                \r>> If the 'bounds' argument is not given, the 'initial_guesses'
+                \r>> argument must be given as a 2D numpy array of parameter initial
+                \r>> guesses.
+                """
+            )
+
+        self.n_climbs = (
+            max(self.n_samples // 10, 1)
+            if n_climbs is None
+            else min(n_climbs, self.n_samples)
         )
-        # remove any duplicates and create the evaluation coordinates
-        self.to_evaluate = unique(samples, axis=0)[:self.n_samples, :]
+
+    def evaluate_posterior(self, posterior: callable):
+        while self.state != "end":
+            # evaluate the posterior log-probabilities
+            p = array([posterior(theta) for theta in self.get_parameters()])
+            # pass the log-probabilities back
+            self.give_probabilities(p)
 
     def get_parameters(self) -> ndarray:
         """
@@ -179,6 +217,37 @@ class PdfGrid:
         if self.report_progress:
             self.print_status()
 
+    def lower_threshold(self):
+        # first collect stats
+        self.threshold_levels.append(copy(self.threshold))
+        self.threshold_probs.append(self.total_prob[-1])
+        self.threshold_evals.append(len(self.probability))
+
+        if self.threshold_probs[-2] != 0.0:
+            p1, p2 = self.threshold_probs[-2:]
+            n1, n2 = self.threshold_evals[-2:]
+            dn = n2 / n1 - 1.0
+            dp = p2 / p1 - 1.0
+            if (dp / dn) < self.convergence:
+                self.state = "end"
+                self.ending_cleanup()
+                return
+
+        p = array(self.probability)
+        prob_cutoff = self.max_prob - self.threshold
+        below_old = p < prob_cutoff
+        # determine how much the threshold needs to be lowered
+        multiplier = (
+            1 + (prob_cutoff - p[below_old].max()) // self.threshold_adjust_factor
+        )
+
+        self.threshold += multiplier * self.threshold_adjust_factor
+        prob_cutoff = self.max_prob - self.threshold
+
+        above_new = p > prob_cutoff
+        push = below_old & above_new
+        self.edge_push = array([self.coordinates[i] for i in push.nonzero()[0]])
+
     def fill_update(self, log_probabilities: ndarray):
         # add cells that are higher than threshold to edge_push
         prob_cutoff = self.max_prob - self.threshold
@@ -186,33 +255,9 @@ class PdfGrid:
         if above.any():
             self.edge_push = self.to_evaluate[above]
         else:
-
-            # first collect stats
-            self.threshold_levels.append(copy(self.threshold))
-            self.threshold_probs.append(self.total_prob[-1])
-            self.threshold_evals.append(len(self.probability))
-
-            if self.threshold_probs[-2] != 0.0:
-                p1, p2 = self.threshold_probs[-2:]
-                n1, n2 = self.threshold_evals[-2:]
-                dn = n2 / n1 - 1.0
-                dp = p2 / p1 - 1.0
-                if (dp / dn) < self.convergence:
-                    self.state = "end"
-                    self.ending_cleanup()
-                    return
-
-            p = array(self.probability)
-            below_old = p < prob_cutoff
-            # determine how much the threshold needs to be lowered
-            multiplier = 1 + (prob_cutoff - p[below_old].max()) // self.threshold_adjust_factor
-
-            self.threshold += multiplier * self.threshold_adjust_factor
-            prob_cutoff = self.max_prob - self.threshold
-
-            above_new = p > prob_cutoff
-            push = below_old & above_new
-            self.edge_push = array([self.coordinates[i] for i in push.nonzero()[0]])
+            self.lower_threshold()
+            if self.state == "end":
+                return
 
         self.fill_proposal()
 
@@ -245,20 +290,26 @@ class PdfGrid:
 
     def climb_proposal(self):
         while len(self.climb_starts) > 0:
-            neighbour_set = {v.tobytes() for v in self.current_cell[None, :] + self.neighbours}
+            # build a set of all the neighbours of the current cell
+            neighbour_set = {
+                v.tobytes() for v in self.current_cell[None, :] + self.neighbours
+            }
+            # remove any neighbours which are already evaluated
             neighbour_set -= self.evaluated
 
-            if len(neighbour_set) == 0:
-                self.current_index, self.current_cell = self.climb_starts.pop()
-            else:
-                self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in neighbour_set])
-                in_bounds = (
-                        (self.to_evaluate >= self.lower_bounds) &
-                        (self.to_evaluate <= self.upper_bounds)
-                ).all(axis=1)
-                self.to_evaluate = self.to_evaluate[in_bounds]
-                break
-        else:
+            # if there are unevaluated neighbours we prepare them for evaluation
+            if len(neighbour_set) != 0:
+                self.to_evaluate = stack(
+                    [frombuffer(s, dtype=int16) for s in neighbour_set]
+                )
+                self.to_evaluate = self.enforce_bounds(self.to_evaluate)
+                if self.to_evaluate.size != 0:
+                    break
+
+            # if there are no neighbours to evaluate, we swap to a new starting position
+            self.current_index, self.current_cell = self.climb_starts.pop()
+
+        else:  # once we've run out of starting positions to climb from, we switch to fill
             self.state = "fill"
             self.fill_proposal()
 
@@ -279,6 +330,7 @@ class PdfGrid:
         r = (self.edge_push[None, :, :] + self.neighbours[:, None, :]).reshape(
             self.edge_push.shape[0] * self.neighbours.shape[0], self.n_dims
         )
+        # print("r shape", r.shape)
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
         fill_set = {v.tobytes() for v in r}
@@ -286,20 +338,23 @@ class PdfGrid:
         # remove all the index vectors which are already evaluated
         fill_set.difference_update(self.evaluated)
         # provision for all outer cells having been evaluated, so no
-        # viable nearest neighbours - use full probability distribution
-        # to find all edge cells (ie. lower than threshold)
+        # viable nearest neighbours
         if len(fill_set) == 0:
-            raise ValueError("fill set empty")
+            self.lower_threshold()
+            if self.state == "end":
+                return
+            self.fill_proposal()
+
         else:
             # here the set of fill vectors is converted back to an array
             self.to_evaluate = stack([frombuffer(s, dtype=int16) for s in fill_set])
             # remove any coordinates which are outside the bounds
-            in_bounds = (
-                (self.to_evaluate >= self.lower_bounds) &
-                (self.to_evaluate <= self.upper_bounds)
-            ).all(axis=1)
-
-            self.to_evaluate = self.to_evaluate[in_bounds]
+            self.to_evaluate = self.bounds_check(self.to_evaluate)
+            if self.to_evaluate.size == 0:
+                self.lower_threshold()
+                if self.state == "end":
+                    return
+                self.fill_proposal()
 
     def ending_cleanup(self):
         inds = (array(self.probability) > (self.max_prob - self.threshold)).nonzero()[0]
@@ -311,6 +366,16 @@ class PdfGrid:
         self.edge_push = None
         self.to_evaluate = None
 
+    def enforce_bounds(self, points: ndarray) -> ndarray:
+        in_bounds = ((points >= self.lower_bounds) & (points <= self.upper_bounds)).all(
+            axis=1
+        )
+
+        return points[in_bounds]
+
+    def skip_bounds(self, points: ndarray):
+        return points
+
     def print_status(self):
         msg = f"\r [ {len(self.probability)} total evaluations, state is {self.state} ]"
         sys.stdout.write(msg)
@@ -318,6 +383,45 @@ class PdfGrid:
 
     def plot_convergence(self):
         plot_convergence(self.threshold_evals, self.threshold_probs)
+
+    def matrix_plot(self, **kwargs):
+        """
+        Construct a 'matrix plot' of the parameters which shows all possible
+        1D and 2D marginal distributions.
+
+        :keyword labels: \
+            A list of strings to be used as axis labels for each parameter being plotted.
+
+        :keyword bool show: \
+            Sets whether the plot is displayed.
+
+        :keyword reference: \
+            A list of reference values for each parameter which will be over-plotted.
+
+        :keyword str filename: \
+            File path to which the matrix plot will be saved (if specified).
+
+        :keyword str colormap: \
+            Name of a ``matplotlib`` colormap to be used for the plots.
+
+        :keyword bool show_ticks: \
+            By default, axis ticks are only shown when plotting less than 6 variables.
+            This behaviour can be overridden for any number of parameters by setting
+            show_ticks to either True or False.
+
+        :keyword int label_size: \
+            The font-size used for axis labels.
+        """
+        coords = stack(self.coordinates)
+        probs = array(self.probability)
+        probs = exp(probs - probs.max())
+        matrix_plot(
+            coords=coords,
+            probs=probs,
+            spacing=self.spacing,
+            offset=self.offset,
+            **kwargs
+        )
 
     def get_marginal(self, variables: list[int]) -> tuple[ndarray, ndarray]:
         """
@@ -335,16 +439,13 @@ class PdfGrid:
         coords = stack(self.coordinates)
         probs = array(self.probability)
         probs = exp(probs - probs.max())
-        # find all unique sub-vectors for the marginalisation dimensions and their indices
-        uniques, inverse, counts = unique(coords[:, z], return_inverse=True, return_counts=True, axis=0)
-        # use the indices and the counts to calculate the CDF then convert to the PDF
-        marginal_pdf = probs[inverse.argsort()].cumsum()[counts.cumsum() - 1]
-        marginal_pdf[1:] -= marginal_pdf[:-1]
-        # use the spacing to properly normalise the PDF
-        marginal_pdf /= self.spacing[z].prod() * marginal_pdf.sum()
-        # convert the coordinate vectors to parameter values
-        uniques = uniques * self.spacing[None, z] + self.offset[None, z]
-        return uniques.squeeze(), marginal_pdf
+        return compute_marginal(
+            coords=coords,
+            probs=probs,
+            spacing=self.spacing,
+            offset=self.offset,
+            z=z
+        )
 
     def generate_sample(self, n_samples: int) -> ndarray:
         """
@@ -368,8 +469,8 @@ class PdfGrid:
         params = stack(self.coordinates) * self.spacing[None, :] + self.offset[None, :]
         # Randomly pick points within the sampled cells
         sample = params[indices, :] + rng.uniform(
-            low=-0.5*self.spacing,
-            high=0.5*self.spacing,
-            size=[n_samples, self.n_dims]
+            low=-0.5 * self.spacing,
+            high=0.5 * self.spacing,
+            size=[n_samples, self.n_dims],
         )
         return sample
