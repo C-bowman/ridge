@@ -169,6 +169,13 @@ class PdfGrid:
         )
 
     def evaluate_posterior(self, posterior: callable):
+        """
+        Evaluate the given posterior using the specified grid.
+
+        :param posterior: \
+            A function which takes a 1D numpy ``ndarray`` of the model parameters
+            as its only argument, and returns the posterior log-probability.
+        """
         while self.state != "end":
             # evaluate the posterior log-probabilities
             p = array([posterior(theta) for theta in self.get_parameters()])
@@ -382,6 +389,10 @@ class PdfGrid:
         sys.stdout.flush()
 
     def plot_convergence(self):
+        """
+        Generate plots displaying how the total probability of evaluated cells
+        converges as the total number of evaluations increases.
+        """
         plot_convergence(self.threshold_evals, self.threshold_probs)
 
     def matrix_plot(self, **kwargs):
