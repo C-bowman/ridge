@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/C-bowman/pdf-grid"
+Homepage = "https://github.com/C-bowman/ridge"
 
 [project.optional-dependencies]
 tests = [
