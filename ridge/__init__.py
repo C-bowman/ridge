@@ -5,13 +5,13 @@ from numpy.random import default_rng
 from typing import Union
 from copy import copy
 import sys
-from pdfgrid.plotting import plot_convergence, matrix_plot
-from pdfgrid.utils import neighbour_vectors, uniform_grid_sample, compute_marginal
+from ridge.plotting import plot_convergence, matrix_plot
+from ridge.utils import neighbour_vectors, uniform_grid_sample, compute_marginal
 
 rng = default_rng()
 
 
-class PdfGrid:
+class Ridge:
     """
     Adaptive grid evaluation for PDFs
 
@@ -393,7 +393,7 @@ class PdfGrid:
         Generate plots displaying how the total probability of evaluated cells
         converges as the total number of evaluations increases.
         """
-        plot_convergence(self.threshold_evals, self.threshold_probs)
+        plot_convergence(self.threshold_evals[1:], self.threshold_probs[1:])
 
     def matrix_plot(self, **kwargs):
         """

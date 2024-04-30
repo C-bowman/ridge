@@ -1,7 +1,7 @@
 from numpy import sqrt, array
 import matplotlib.pyplot as plt
-from pdfgrid import PdfGrid
-from pdfgrid.plotting import plot_marginal_2d
+from ridge import Ridge
+from ridge.plotting import plot_marginal_2d
 
 """
 2D test case using a ring-shaped distribution centred on the origin, with
@@ -29,7 +29,7 @@ grid_spacing = array([0.03, 0.03])
 grid_centre = array([0., 0.])
 grid_bounds = array([[-0.5, 0.], [1.5, 1.5]]).T
 
-grid = PdfGrid(
+grid = Ridge(
     spacing=grid_spacing,
     offset=grid_centre,
     bounds=grid_bounds

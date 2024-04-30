@@ -2,7 +2,7 @@ from numpy import linspace, exp, pi
 from numpy import sqrt, array, eye, ndarray
 from numpy.linalg import cholesky
 from scipy.linalg import solve_triangular
-from pdfgrid import PdfGrid
+from ridge import Ridge
 
 
 class GaussianProcessPosterior:
@@ -32,8 +32,8 @@ def test_marginalisation():
     grid_centre = array([0.] * dims)
     grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
 
-    # create a PdfGrid instance
-    grid = PdfGrid(
+    # create a Ridge instance
+    grid = Ridge(
         spacing=grid_spacing,
         offset=grid_centre,
         bounds=grid_bounds,
