@@ -12,7 +12,7 @@ class GaussianProcessPosterior:
         self.L = scale
 
         dx = self.x[:, None] - self.x[None, :]
-        self.K = exp(-0.5 * dx ** 2 / self.L ** 2)
+        self.K = exp(-0.5 * dx**2 / self.L**2)
 
         L = cholesky(self.K)
         self.iK = solve_triangular(L, eye(self.n), lower=True)
@@ -29,15 +29,12 @@ def test_marginalisation():
 
     # specify settings for the grid
     grid_spacing = array([0.2] * dims)
-    grid_centre = array([0.] * dims)
+    grid_centre = array([0.0] * dims)
     grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
 
     # create a Ridge instance
     grid = Ridge(
-        spacing=grid_spacing,
-        offset=grid_centre,
-        bounds=grid_bounds,
-        convergence=0.01
+        spacing=grid_spacing, offset=grid_centre, bounds=grid_bounds, convergence=0.01
     )
 
     # evaluate the posterior

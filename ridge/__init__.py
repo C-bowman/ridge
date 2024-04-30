@@ -431,7 +431,7 @@ class Ridge:
             probs=probs,
             spacing=self.spacing,
             offset=self.offset,
-            **kwargs
+            **kwargs,
         )
 
     def get_marginal(self, variables: list[int]) -> tuple[ndarray, ndarray]:
@@ -451,11 +451,7 @@ class Ridge:
         probs = array(self.probability)
         probs = exp(probs - probs.max())
         return compute_marginal(
-            coords=coords,
-            probs=probs,
-            spacing=self.spacing,
-            offset=self.offset,
-            z=z
+            coords=coords, probs=probs, spacing=self.spacing, offset=self.offset, z=z
         )
 
     def generate_sample(self, n_samples: int) -> ndarray:

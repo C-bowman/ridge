@@ -20,7 +20,7 @@ class GaussianProcessPosterior:
         self.L = scale
 
         dx = self.x[:, None] - self.x[None, :]
-        self.K = exp(-0.5 * dx ** 2 / self.L ** 2)
+        self.K = exp(-0.5 * dx**2 / self.L**2)
 
         L = cholesky(self.K)
         self.iK = solve_triangular(L, eye(self.n), lower=True)
@@ -36,7 +36,7 @@ posterior = GaussianProcessPosterior(dimensions=dims, scale=1.5)
 
 # specify settings for the grid
 grid_spacing = array([0.2] * dims)
-grid_centre = array([0.] * dims)
+grid_centre = array([0.0] * dims)
 grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
 
 # create a PdfGrid instance
@@ -59,7 +59,14 @@ exact_marginal = exp(-0.5 * axis**2) / sqrt(2 * pi)
 
 # plot the marginal to verify the result
 plt.plot(points, probs, label="RIDGE marginal")
-plt.plot(axis, exact_marginal, marker="o", ls="none", markerfacecolor="none", label="exact marginal")
+plt.plot(
+    axis,
+    exact_marginal,
+    marker="o",
+    ls="none",
+    markerfacecolor="none",
+    label="exact marginal",
+)
 plt.grid()
 plt.legend()
 plt.ylim([0, None])

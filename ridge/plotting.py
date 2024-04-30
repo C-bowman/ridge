@@ -34,7 +34,7 @@ def plot_marginal_2d(
     probabilities: ndarray,
     labels: list[str] = None,
     plot_axis=None,
-    colormap_name: str = "viridis"
+    colormap_name: str = "viridis",
 ):
     spacing = array([find_spacing(v) for v in points.T])
 
@@ -70,7 +70,7 @@ def plot_marginal_2d(
 
 def find_spacing(values: ndarray):
     diffs = diff(sort(values))
-    return diffs.compress(diffs > 0.).min()
+    return diffs.compress(diffs > 0.0).min()
 
 
 def matrix_plot(
@@ -192,11 +192,7 @@ def matrix_plot(
         # are we on the diagonal?
         if i == j:
             points, marginal_probs = compute_marginal(
-                coords=coords,
-                probs=probs,
-                spacing=spacing,
-                offset=offset,
-                z=[i]
+                coords=coords, probs=probs, spacing=spacing, offset=offset, z=[i]
             )
 
             ax.plot(
@@ -235,7 +231,7 @@ def matrix_plot(
                 points=points,
                 probabilities=marginal_probs,
                 plot_axis=ax,
-                colormap_name=colormap
+                colormap_name=colormap,
             )
 
             # plot any reference points if given

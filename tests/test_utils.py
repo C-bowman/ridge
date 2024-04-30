@@ -7,7 +7,7 @@ from ridge.utils import neighbour_vectors
 def test_neighbour_vectors(dims: int):
     v = neighbour_vectors(n=dims, cutoff=1, dtype=int16)
     # verify shape of output
-    assert v.shape == (2*dims, dims)
+    assert v.shape == (2 * dims, dims)
     # check total displacement doesn't exceed the cutoff
     assert (abs(v).sum(axis=1) == 1).all()
     # verify that all returned vectors are unique
