@@ -1,6 +1,6 @@
 import pytest
 from numpy import int16, unique
-from pdfgrid.utils import neighbour_vectors
+from ridge.utils import neighbour_vectors
 
 
 @pytest.mark.parametrize("dims", [2, 3, 4, 5])

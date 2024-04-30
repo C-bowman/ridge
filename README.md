@@ -1,3 +1,3 @@
-# pdf-grid
+# RIDGE
 
-Efficient grid-based evaluation of probability distributions
+RIDGE is an algorithm for efficient grid-based evaluation of probability distributions.

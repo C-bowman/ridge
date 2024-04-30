@@ -4,7 +4,7 @@ from numpy.linalg import cholesky
 from scipy.linalg import solve_triangular
 import matplotlib.pyplot as plt
 
-from pdfgrid import PdfGrid
+from ridge import Ridge
 
 
 """
@@ -40,7 +40,7 @@ grid_centre = array([0.] * dims)
 grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
 
 # create a PdfGrid instance
-grid = PdfGrid(
+grid = Ridge(
     spacing=grid_spacing,
     offset=grid_centre,
     bounds=grid_bounds,
@@ -58,7 +58,7 @@ axis = linspace(-20, 20, 41) * 0.2
 exact_marginal = exp(-0.5 * axis**2) / sqrt(2 * pi)
 
 # plot the marginal to verify the result
-plt.plot(points, probs, label="pdf-grid marginal")
+plt.plot(points, probs, label="RIDGE marginal")
 plt.plot(axis, exact_marginal, marker="o", ls="none", markerfacecolor="none", label="exact marginal")
 plt.grid()
 plt.legend()

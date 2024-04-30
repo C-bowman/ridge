@@ -4,7 +4,7 @@ from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 from matplotlib import colormaps
 from numpy import array, diff, sort, ndarray
-from pdfgrid.utils import compute_marginal
+from ridge.utils import compute_marginal
 
 
 def plot_convergence(evaluations, probabilities):
@@ -20,7 +20,6 @@ def plot_convergence(evaluations, probabilities):
     frac_diff = p[1:] / p[:-1] - 1
     ax2.plot(evaluations[2:], frac_diff, alpha=0.5, lw=2, c="C0")
     ax2.plot(evaluations[2:], frac_diff, "D", c="C0")
-    ax2.set_xlim([0.0, None])
     ax2.set_yscale("log")
     ax2.set_xlabel("total posterior evaluations")
     ax2.set_ylabel("fractional change in total probability")

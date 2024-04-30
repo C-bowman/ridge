@@ -1,6 +1,6 @@
 from numpy import sqrt, array
 import matplotlib.pyplot as plt
-from pdfgrid import PdfGrid
+from ridge import Ridge
 
 
 class ToroidalGaussian:
@@ -24,7 +24,7 @@ grid_centre = array([0., 0., 0.])
 grid_bounds = array([[-1.5, -1.5, -0.5], [1.5, 1.5, 0.5]]).T
 
 # create a PdfGrid instance
-grid = PdfGrid(
+grid = Ridge(
     spacing=grid_spacing,
     offset=grid_centre,
     bounds=grid_bounds,
