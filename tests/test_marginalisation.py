@@ -34,7 +34,10 @@ def test_marginalisation():
 
     # create a Ridge instance
     grid = Ridge(
-        spacing=grid_spacing, offset=grid_centre, bounds=grid_bounds, convergence=0.01
+        spacing=grid_spacing,
+        offset=grid_centre,
+        bounds=grid_bounds,
+        convergence_threshold=0.01
     )
 
     # evaluate the posterior

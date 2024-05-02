@@ -13,7 +13,7 @@ rng = default_rng()
 
 class Ridge:
     """
-    Adaptive grid evaluation for PDFs
+    Rapid inference via density-bounded grid exploration.
 
     :param spacing: \
         A numpy ``ndarray`` specifying the grid spacing in each dimension.
@@ -39,9 +39,15 @@ class Ridge:
         guesses are used for climbing. If unspecified, a default of 10% of the
         total number of initial guesses is used.
 
-    :param convergence: \
-        The threshold for the fractional change in total probability which is used
-        to determine when the algorithm has converged.
+    :param convergence_threshold: \
+        Convergence is determined by the ratio of the fractional change in total
+        probability of evaluated cells to the fractional change in the number of
+        evaluated cells. For example, if following an iteration the total probability
+        of evaluated cells has increased by 1%, and the number of evaluated cells has
+        increased by 10%, the ratio will have a value of 0.1. If this ratio falls
+        below the given value of ``convergence_threshold``, the algorithm will
+        terminate.
+
     """
 
     def __init__(
@@ -51,25 +57,27 @@ class Ridge:
         bounds: ndarray = None,
         initial_guesses: Union[int, ndarray] = None,
         n_climbs: int = None,
-        convergence: float = 0.05,
+        convergence_threshold: float = 0.02,
     ):
         self.spacing = spacing if isinstance(spacing, ndarray) else array(spacing)
         self.offset = offset if isinstance(offset, ndarray) else array(offset)
 
         if self.spacing.ndim != 1 or self.offset.ndim != 1:
             raise ValueError(
-                f"[ PdfGrid error ] \n \
-                >> 'spacing' and 'offset' must be 1D numpy arrays, but have \
-                >> dimensions {self.spacing.ndim} and {self.offset.ndim} respectively.\
-                "
+                f"""\n
+                \r[ Ridge initialisation error ]
+                \r>> 'spacing' and 'offset' must be 1D numpy arrays, but have
+                \r>> dimensions {self.spacing.ndim} and {self.offset.ndim} respectively.
+                """
             )
 
         if self.spacing.size != self.offset.size:
             raise ValueError(
-                f"[ PdfGrid error ] \n \
-                >> 'spacing' and 'offset' must be 1D numpy arrays of equal size, but \
-                >> have sizes {self.spacing.size} and {self.offset.size} respectively.\
-                "
+                f"""\n
+                \r[ Ridge initialisation error ]
+                \r>> 'spacing' and 'offset' must be 1D numpy arrays of equal size, but 
+                \r>> have sizes {self.spacing.size} and {self.offset.size} respectively.
+                """
             )
 
         if bounds is not None:
@@ -98,7 +106,7 @@ class Ridge:
         # SETTINGS
         self.threshold = 1
         self.threshold_adjust_factor = sqrt(0.5) ** self.n_dims
-        self.convergence = convergence
+        self.convergence = convergence_threshold
 
         # DATA STORAGE
         self.coordinates = []
@@ -155,7 +163,7 @@ class Ridge:
         else:
             raise ValueError(
                 """\n
-                \r[ PdfGrid error ]
+                \r[ Ridge initialisation error ]
                 \r>> If the 'bounds' argument is not given, the 'initial_guesses'
                 \r>> argument must be given as a 2D numpy array of parameter initial
                 \r>> guesses.
@@ -337,7 +345,7 @@ class Ridge:
         r = (self.edge_push[None, :, :] + self.neighbours[:, None, :]).reshape(
             self.edge_push.shape[0] * self.neighbours.shape[0], self.n_dims
         )
-        # print("r shape", r.shape)
+
         # treating the 2D array of vectors as an iterable returns
         # each column vector in turn.
         fill_set = {v.tobytes() for v in r}
@@ -384,7 +392,7 @@ class Ridge:
         return points
 
     def print_status(self):
-        msg = f"\r [ {len(self.probability)} total evaluations, state is {self.state} ]"
+        msg = f"\r [ {len(self.probability)} total evaluations, state is {self.state} ]    "
         sys.stdout.write(msg)
         sys.stdout.flush()
 
@@ -393,7 +401,9 @@ class Ridge:
         Generate plots displaying how the total probability of evaluated cells
         converges as the total number of evaluations increases.
         """
-        plot_convergence(self.threshold_evals[1:], self.threshold_probs[1:])
+        plot_convergence(
+            self.threshold_evals, self.threshold_probs, threshold=self.convergence
+        )
 
     def matrix_plot(self, **kwargs):
         """

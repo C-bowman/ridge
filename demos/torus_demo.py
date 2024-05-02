@@ -1,12 +1,13 @@
-from numpy import sqrt, array
+from numpy import sqrt, array, exp
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from ridge import Ridge
 
 
 class ToroidalGaussian:
     def __init__(self):
-        self.R0 = 1.0
-        self.eps = 0.10
+        self.R0 = 1.0  # major radius of the torus
+        self.eps = 0.10  # aspect ratio of the torus
         self.coeff = -0.5 / (self.R0 * self.eps) ** 2
 
     def __call__(self, theta):
@@ -27,8 +28,7 @@ grid_bounds = array([[-1.5, -1.5, -0.5], [1.5, 1.5, 0.5]]).T
 grid = Ridge(
     spacing=grid_spacing,
     offset=grid_centre,
-    bounds=grid_bounds,
-    convergence=0.02
+    bounds=grid_bounds
 )
 
 # evaluate the posterior
@@ -51,3 +51,22 @@ grid.matrix_plot(labels=["x", "y", "z"], colormap="viridis")
 
 # plot the convergence information
 grid.plot_convergence()
+
+# we can also generate a sample
+sample = grid.generate_sample(5000)
+
+# plot the samples, coloring each point based on its probability
+probs = array([posterior(s) for s in sample])
+pnt_colors = exp(probs - probs.max())
+
+fig = plt.figure(figsize=(10, 10))
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+ax.set_xlim([-1, 1])
+ax.set_ylim([-1, 1])
+ax.set_zlim([-1, 1])
+ax.set_xlabel("x", fontsize=15)
+ax.set_ylabel("y", fontsize=15)
+ax.set_zlabel("z", fontsize=15)
+ax.scatter(*sample.T, c=pnt_colors)
+plt.tight_layout()
+plt.show()

@@ -7,24 +7,32 @@ from numpy import array, diff, sort, ndarray
 from ridge.utils import compute_marginal
 
 
-def plot_convergence(evaluations, probabilities):
+def plot_convergence(evaluations, probabilities, threshold=None):
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121)
-    ax1.plot(evaluations, probabilities, ".-", lw=2)
+    ax1.plot(evaluations[1:], probabilities[1:], ".-", lw=2)
     ax1.set_xlabel("total posterior evaluations")
     ax1.set_ylabel("total probability of evaluated cells")
     ax1.grid()
 
     ax2 = fig.add_subplot(122)
     p = array(probabilities[1:])
-    frac_diff = p[1:] / p[:-1] - 1
-    ax2.plot(evaluations[2:], frac_diff, alpha=0.5, lw=2, c="C0")
-    ax2.plot(evaluations[2:], frac_diff, "D", c="C0")
+    n = array(evaluations[1:])
+    prob_fracs = p[1:] / p[:-1] - 1
+    eval_fracs = n[1:] / n[:-1] - 1
+    conv_ratio = prob_fracs / eval_fracs
+    ax2.plot(evaluations[2:], conv_ratio, alpha=0.5, lw=2, c="C0")
+    ax2.plot(evaluations[2:], conv_ratio, "D", c="C0")
     ax2.set_yscale("log")
     ax2.set_xlabel("total posterior evaluations")
-    ax2.set_ylabel("fractional change in total probability")
-    ax2.grid()
+    ax2.set_ylabel("convergence ratio")
 
+    if threshold is not None:
+        ax2.autoscale_view()
+        ax2.set_autoscale_on(False)
+        ax2.plot([0, evaluations[-1] * 2], [threshold, threshold], ls="dashed", c="red", label="convergence threshold")
+        ax2.legend()
+    ax2.grid()
     plt.tight_layout()
     plt.show()
 
