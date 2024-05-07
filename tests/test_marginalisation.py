@@ -1,4 +1,4 @@
-from numpy import linspace, exp, pi
+from numpy import linspace, exp, pi, cov
 from numpy import sqrt, array, eye, ndarray
 from numpy.linalg import cholesky
 from scipy.linalg import solve_triangular
@@ -52,3 +52,31 @@ def test_marginalisation():
     # verify the computed marginal agrees with the analytic result
     error = (probs - exact_marginal) / exact_marginal.max()
     assert abs(error).max() < 0.01
+
+
+def test_generate_samples():
+    # set up the test-case posterior
+    dims = 2
+    posterior = GaussianProcessPosterior(dimensions=dims, scale=1.5)
+
+    # specify settings for the grid
+    grid_spacing = array([0.05] * dims)
+    grid_centre = array([0.0] * dims)
+    grid_bounds = array([[-8.0] * dims, [8.0] * dims]).T
+
+    # create a Ridge instance
+    grid = Ridge(
+        spacing=grid_spacing,
+        offset=grid_centre,
+        bounds=grid_bounds,
+        convergence_threshold=0.01
+    )
+
+    # evaluate the posterior
+    grid.evaluate_posterior(posterior=posterior)
+    # generate the samples
+    samples = grid.generate_samples(n_samples=50000)
+    # test the mean and covariance of the sample against the true values
+    covariance_error = cov(samples.T) - posterior.K
+    assert (abs(covariance_error) < 0.03).all()
+    assert (abs(samples.mean(axis=0)) < 0.03).all()

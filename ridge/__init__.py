@@ -135,7 +135,7 @@ class Ridge:
 
         # DIAGNOSTICS
         self.report_progress = True
-        self.cell_batches = list()
+        self.cell_batches = []
 
         # determine how the problem is initialised
         if isinstance(initial_guesses, ndarray):
@@ -464,7 +464,7 @@ class Ridge:
             coords=coords, probs=probs, spacing=self.spacing, offset=self.offset, z=z
         )
 
-    def generate_sample(self, n_samples: int) -> ndarray:
+    def generate_samples(self, n_samples: int) -> ndarray:
         """
         Generate samples by approximating the PDF using nearest-neighbour
         interpolation around the evaluated grid cells.
@@ -485,9 +485,9 @@ class Ridge:
         # gather the evaluated cell coordinates into a 2D numpy array
         params = stack(self.coordinates) * self.spacing[None, :] + self.offset[None, :]
         # Randomly pick points within the sampled cells
-        sample = params[indices, :] + rng.uniform(
+        samples = params[indices, :] + rng.uniform(
             low=-0.5 * self.spacing,
             high=0.5 * self.spacing,
             size=[n_samples, self.n_dims],
         )
-        return sample
+        return samples
