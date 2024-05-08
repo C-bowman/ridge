@@ -145,20 +145,20 @@ def matrix_plot(
     else:
         if len(labels) != N_par:
             raise ValueError(
-                """
-                [ matrix_plot error ]
-                >> The number of labels given does not match
-                >> the number of plotted parameters.
+                """\n
+                \r[ matrix_plot error ]
+                \r>> The number of labels given does not match
+                \r>> the number of plotted parameters.
                 """
             )
 
     if reference is not None:
         if len(reference) != N_par:
             raise ValueError(
-                """
-                [ matrix_plot error ]
-                >> The number of reference values given does not match
-                >> the number of plotted parameters.
+                """\n
+                \r[ matrix_plot error ]
+                \r>> The number of reference values given does not match
+                \r>> the number of plotted parameters.
                 """
             )
 
